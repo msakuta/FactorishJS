@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Conveyor</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<style>
+			body {
+				color: #000000;
+				font-family:Monospace;
+				font-size:15px;
+				text-align:center;
+
+				background-color: #f0f0f0;
+				margin: 0px;
+			}
+
+			#container{
+				position: relative;
+			}
+
+			#points{
+				font-size: 25px;
+			}
+
+			/* Class that prevents text selection by mouse dragging.
+			  The style is not defined by standard, so we'd write down browser-dependent styles for major browsers.
+			  Support by IE11 is somewhat incomplete since Ctrl+A would select the text in elements with this style. */
+			.noselect{
+				-webkit-touch-callout: none; /* iOS Safari */
+				-webkit-user-select: none;   /* Chrome/Safari/Opera */
+				-khtml-user-select: none;    /* Konqueror */
+				-moz-user-select: none;      /* Firefox */
+				-ms-user-select: none;       /* IE/Edge */
+				user-select: none;           /* non-prefixed version, currently
+											  not supported by any browser */
+			}
+
+			table{
+				background-color: #f7c0a0;
+				border: 3px solid #7f7f7f;
+				border-collapse: collapse;
+				/* Centering */
+				margin-left: auto;
+				margin-right: auto;
+			}
+			td{background-color: #ffe0d0}
+			th{background-color: #e0c0a0}
+			td, th{padding: 2px; border: 2px solid #7f7f7f}
+		</style>
+	</head>
+	<body>
+		<h1>Conveyor</h1>
+		Size:
+		<select id="sizeSelect">
+			<option>6</option>
+			<option selected>7</option>
+			<option>8</option>
+			<option>9</option>
+			<option>10</option>
+			<option>11</option>
+			<option>12</option>
+		</select>
+		<input type="button" onclick="generateBoard()" value="Start">
+		<hr>
+		<div id="container"></div>
+		<div id="points"></div>
+		<hr>
+		<div id="highScores"></div>
+		<hr>
+		<div>Source on <a href="https://github.com/msakuta/WebKashiwamochi">GitHub</a>.
+
+		<script>
+		var container;
+		var table;
+		var size;
+		var board;
+		var tileElems;
+		var selectedTile = null;
+		var selectedCoords = null;
+		var cursorElem;
+		var messageElem;
+		var debugText;
+
+		// Constants
+		var tilesize = 32;
+
+		var toolBarElem;
+		var toolElems = [];
+		var toolDefs = [
+			{
+				symbol: ["&lt;", "^", "&gt;", "V"],
+			},
+			{ symbol: 'P' },
+			{ symbol: 'D' }
+		];
+		var currentTool = -1;
+		var currentRotation = 0;
+
+
+		function iterateTiles(func){
+			for(var iy = 0; iy < size; iy++){
+				for(var ix = 0; ix < size; ix++){
+					func(ix, iy);
+				}
+			}
+		}
+
+		function onKeyDown(event){
+			// "R" key rotates the tile
+			if(event.keyCode === 82){
+				if(0 <= currentTool){
+					currentRotation = (currentRotation + 1) % 4;
+					updateTool(currentTool);
+				}
+				else if(selectedCoords !== null){
+					var tile = board[selectedCoords[0] + selectedCoords[1] * size];
+					tile.rotation = (tile.rotation + 1) % 4;
+					updateTile(tile);
+				}
+			}
+		}
+
+		window.onload = function(){
+			window.addEventListener( 'keydown', onKeyDown, false );
+
+			generateBoard();
+		}
+
+		/// Update single tile graphics to match internal data
+		function updateTile(tile){
+			var idx = board.indexOf(tile);
+			var c = idx % size;
+			var r = Math.floor(idx / size);
+			var tileElem = tileElems[c + r * size];
+			// The only child of tile element is the tile text.
+			if(tile.type === null)
+				tileElem.innerHTML = "";
+			else if(tile.type.symbol instanceof Array){
+				tileElem.innerHTML = tile.type.symbol[tile.rotation];
+			}
+			else{
+				tileElem.innerHTML = tile.type.symbol;
+			}
+		}
+
+		function updateTool(tool){
+			if(0 <= tool && tool < toolElems.length)
+			toolElems[tool].innerHTML = toolDefs[tool].symbol instanceof Array ? toolDefs[tool].symbol[currentRotation] : toolDefs[tool].symbol;
+		}
+
+		function createElements(){
+			tileElems = new Array(size * size);
+
+			// The containers are nested so that the inner container can be easily
+			// discarded to recreate the whole game.
+			var outerContainer = document.getElementById("container");
+			if(container)
+				outerContainer.removeChild(container);
+			container = document.createElement("div");
+			outerContainer.appendChild(container);
+			if(cursorElem)
+				cursorElem = null;
+
+			table = document.createElement("div");
+			table.style.borderStyle = 'solid';
+			table.style.borderWidth = '1px';
+			table.style.borderColor = 'red';
+			table.style.position = 'relative';
+			table.style.left = '50%';
+			table.style.width = (size * 32. + 8) + 'px';
+			table.style.height = (size * 32. + 8) + 'px';
+
+			messageElem = document.createElement('div');
+			container.appendChild(messageElem);
+			messageElem.style.fontFamily = 'Sans-serif';
+			messageElem.style.fontSize = '20pt';
+			messageElem.style.position = 'relative';
+			messageElem.style.color = 'red';
+
+			container.appendChild(table);
+			for(var iy = 0; iy < size; iy++){
+				for(var ix = 0; ix < size; ix++){
+					var tileElem = document.createElement("div");
+					tileElems[ix + iy * size] = tileElem;
+					tileElem.innerHTML = "";
+					tileElem.style.width = '31px';
+					tileElem.style.height = '31px';
+					tileElem.style.position = 'absolute';
+					tileElem.style.top = (32.0 * iy + 4) + 'px';
+					tileElem.style.left = (32.0 * ix + 4) + 'px';
+					tileElem.style.border = '1px black solid';
+					tileElem.onmousedown = function(e){
+						var idx = tileElems.indexOf(this);
+						var c = idx % size;
+						var r = Math.floor(idx / size);
+
+						if(e.button !== 0){
+							board[c + r * size].type = null;
+						}
+						else if(0 <= currentTool && currentTool < toolDefs.length){
+							board[c + r * size].type = toolDefs[currentTool];
+							board[c + r * size].rotation = currentRotation;
+						}
+						updateTile(board[c + r * size]);
+						return false;
+					}
+
+					// Prevent context menu from right clicking on the tile
+					tileElem.oncontextmenu = function(e){
+						e.preventDefault();
+					}
+
+					tileElem.onmousemove = function(){
+						selectTile(this);
+					}
+					table.appendChild(tileElem);
+
+					// Disable text selection
+					tileElem.setAttribute("class", "noselect");
+				}
+			}
+			// Set the margin after contents are initialized
+			table.style.marginLeft = (-table.getBoundingClientRect().width / 2) + 'px';
+
+			var containerRect = container.getBoundingClientRect();
+			var tableRect = table.getBoundingClientRect();
+
+			function selectTool(idx){
+				// Selecting the same tool twice means deselecting
+				if(currentTool === idx)
+					idx = -1;
+				for(var i = 0; i < toolElems.length; i++)
+					toolElems[i].style.backgroundColor = '#ffffff';
+				if(0 <= idx && idx < toolElems.length)
+					toolElems[idx].style.backgroundColor = '#00ffff';
+				currentTool = idx;
+			}
+
+			// Reset the state before initializing toolbar elements
+			toolElems = [];
+			currentTool = -1;
+			currentRotation = 0;
+
+			// Tool bar
+			toolBarElem = document.createElement('div');
+			toolBarElem.style.borderStyle = 'solid';
+			toolBarElem.style.borderWidth = '1px';
+			toolBarElem.style.borderColor = 'red';
+			toolBarElem.style.position = 'relative';
+			toolBarElem.margin = '3px';
+			toolBarElem.style.left = '50%';
+			toolBarElem.style.width = (toolDefs.length * 32. + 8) + 'px';
+			toolBarElem.style.height = (32. + 8) + 'px';
+			container.appendChild(toolBarElem);
+			for(var i = 0; i < toolDefs.length; i++){
+				var toolElem = document.createElement("div");
+				toolElems.push(toolElem);
+				toolElem.style.width = '31px';
+				toolElem.style.height = '31px';
+				toolElem.style.position = 'absolute';
+				toolElem.style.top = '4px';
+				toolElem.style.left = (32.0 * i + 4) + 'px';
+				toolElem.style.border = '1px black solid';
+				toolElem.style.textAlign = 'center';
+				toolElem.onmousedown = function(e){
+					selectTool(toolElems.indexOf(this));
+				}
+				toolBarElem.appendChild(toolElem);
+				// Disable text selection
+				toolElem.setAttribute("class", "noselect");
+				toolElem.innerHTML = toolDefs[i].symbol instanceof Array ? toolDefs[i].symbol[0] : toolDefs[i].symbol;
+			}
+			// Set the margin after contents are initialized
+			toolBarElem.style.marginLeft = (-toolBarElem.getBoundingClientRect().width / 2) + 'px';
+
+			selectTool(-1);
+
+			debugText = document.createElement('div');
+			container.appendChild(debugText);
+		}
+
+		function selectTile(sel){
+			selectedTile = sel;
+			var idx = tileElems.indexOf(sel);
+			var ix = idx % size;
+			var iy = Math.floor(idx / size);
+			selectedCoords = [ix, iy];
+			if(ix < size-1 && iy < size-1){
+				if(!cursorElem){
+					cursorElem = document.createElement('div');
+					cursorElem.style.border = '2px blue solid';
+					cursorElem.style.pointerEvents = 'none';
+					table.appendChild(cursorElem);
+				}
+				cursorElem.style.position = 'absolute';
+				cursorElem.style.top = (32.0 * iy + 4) + 'px';
+				cursorElem.style.left = (32.0 * ix + 4) + 'px';
+				cursorElem.style.width = '30px';
+				cursorElem.style.height = '30px';
+			}
+		}
+
+		function generateBoard(){
+			var sizeStr = document.getElementById("sizeSelect").value;
+			size = parseInt(sizeStr);
+			board = new Array(size * size);
+
+			for(var i = 0; i < size * size; i++)
+				board[i] = newblock();
+
+			createElements();
+		}
+
+		function newblock(){
+			return {
+				type: null,
+				rotation: 0,
+			};
+		}
+
+		</script>
+
+	</body>
+</html>
