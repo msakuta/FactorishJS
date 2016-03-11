@@ -97,6 +97,7 @@
 		var currentTool = -1;
 		var currentRotation = 0;
 
+		var objects = [];
 
 		function iterateTiles(func){
 			for(var iy = 0; iy < size; iy++){
@@ -125,6 +126,11 @@
 			window.addEventListener( 'keydown', onKeyDown, false );
 
 			generateBoard();
+
+			// Set animation update function
+			window.setInterval(function(){
+				run();
+			}, 50);
 		}
 
 		/// Update single tile graphics to match internal data
@@ -201,6 +207,17 @@
 						else if(0 <= currentTool && currentTool < toolDefs.length){
 							board[c + r * size].type = toolDefs[currentTool];
 							board[c + r * size].rotation = currentRotation;
+						}
+						else{
+							// If mouse button is clicked without any tool selected, add object at the clicked position.
+							var obj = {x: c * tilesize, y: r * tilesize};
+							obj.elem = document.createElement('div');
+							obj.elem.innerHTML = 'o' + objects.length;
+							obj.elem.style.position = 'absolute';
+							obj.elem.style.left = c * tilesize + 'px';
+							obj.elem.style.top = r * tilesize + 'px';
+							table.appendChild(obj.elem);
+							objects.push(obj);
 						}
 						updateTile(board[c + r * size]);
 						return false;
@@ -317,6 +334,27 @@
 				type: null,
 				rotation: 0,
 			};
+		}
+
+		/// Simulation step function
+		function run(){
+			// Iterate all floating objects to update
+			for(var i = 0; i < objects.length; i++){
+				var o = objects[i];
+
+				// Obtain coordinates and tile at the position
+				var tx = Math.floor(o.x / tilesize);
+				var ty = Math.floor(o.y / tilesize);
+				var tile = board[tx + ty * size];
+				if(tile.type === toolDefs[0]){
+					var vx = [-1, 0, 1, 0][tile.rotation];
+					var vy = [0, -1, 0, 1][tile.rotation];
+					o.x = Math.min(size * tilesize, Math.max(0, o.x + vx));
+					o.y = Math.min(size * tilesize, Math.max(0, o.y + vy));
+					o.elem.style.left = o.x + 'px';
+					o.elem.style.top = o.y + 'px';
+				}
+			}
 		}
 
 		</script>
