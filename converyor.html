@@ -106,13 +106,21 @@
 					o.elem.style.top = o.y + 'px';
 				}
 			},
+
+			// Inserter
 			{
-				// Inserter
 				symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
 
 				// Function that is called for every tile every simulation step.
 				frameProc: function(tile){
-					if(simstep % 10 !== 0)
+					if(tile.cooldown === undefined || tile.cooldown < 1)
+						tile.cooldown = 0;
+					else
+						tile.cooldown--;
+					var elem = tileElems[board.indexOf(tile)];
+					elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - tile.cooldown / 10) * 255).toFixed() + ')';
+
+					if(0 < tile.cooldown)
 						return;
 					var idx = board.indexOf(tile);
 					var tx = idx % size;
@@ -126,29 +134,102 @@
 					var dx = tx + vx;
 					var dy = ty + vy;
 					var destTile = board[dx + dy * size];
+
 					// If the source is a producer and destination is a transport belt, put a product into the belt.
-					if(sourceTile.type === toolDefs[2] && destTile.type == toolDefs[0]){
-						newObject(dx, dy);
+					if(sourceTile.type && sourceTile.type.output){
+						if(sourceTile.type.output.call(sourceTile, dx, dy)){
+							tile.cooldown = 10;
+							return;
+						}
 					}
+
 					// If the destinatoin is a destroyer, put the object into the destroyer and cosume it.
-					if(destTile.type === toolDefs[3]){
+					if(destTile.type && destTile.type.input){
 						for(var j = 0; j < objects.length; j++){
 							var o = objects[j];
 							var otx = Math.floor(o.x / tilesize);
 							var oty = Math.floor(o.y / tilesize);
-							if(otx === sx && oty === sy){
+							if(otx === sx && oty === sy && destTile.type.input.call(destTile, o)){
 								table.removeChild(o.elem);
 								objects.splice(j, 1);
-								break;
+								tile.cooldown = 10;
+								return;
 							}
 						}
 					}
 				}
 			},
-			// Producer
-			{ symbol: 'P' },
+			// Ore Mine
+			{ symbol: 'Mi',
+				frameProc: function(tile){
+					if(tile.cooldown === undefined || tile.cooldown < 1)
+						tile.cooldown = 0;
+					else
+						tile.cooldown--;
+					var elem = tileElems[board.indexOf(tile)];
+					elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - tile.cooldown / 20) * 255).toFixed() + ')';
+				},
+				output: function(dx, dy){
+					if(0 < this.cooldown)
+						return false;
+					if(newObject(dx, dy, 'O')){
+						this.cooldown = 20;
+						return true;
+					}
+					else
+						return false;
+				}
+			},
+
+			// Furnace
+			{ symbol: 'F',
+				frameProc: function(tile){
+					if(tile.cooldown === undefined || tile.cooldown < 1)
+						tile.cooldown = 0;
+					else
+						tile.cooldown--;
+					if(tile.consumeCooldown === undefined || tile.consumeCooldown < 1)
+						tile.consumeCooldown = 0;
+					else
+						tile.consumeCooldown--;
+					var elem = tileElems[board.indexOf(tile)];
+					elem.style.backgroundColor = 'rgb(255, ' + ((1 - tile.consumeCooldown / 20) * 255).toFixed() + ', ' + ((1 - tile.cooldown / 20) * 255).toFixed() + ')';
+				},
+				input: function(o){
+					if(o.type !== 'O')
+						return false;
+					this.consumeCooldown = 20;
+					return true;
+				},
+				output: function(dx, dy){
+					if(0 < this.cooldown)
+						return false;
+					if(newObject(dx, dy, 'M')){
+						this.cooldown = 20;
+						return true;
+					}
+					else
+						return false;
+				}
+			},
+
 			// Destroyer
-			{ symbol: 'D' }
+			{ symbol: 'D',
+				frameProc: function(tile){
+					if(tile.consumeCooldown === undefined || tile.consumeCooldown < 1)
+						tile.consumeCooldown = 0;
+					else
+						tile.consumeCooldown--;
+					var elem = tileElems[board.indexOf(tile)];
+					elem.style.backgroundColor = 'rgb(255, ' + ((1 - tile.consumeCooldown / 20) * 255).toFixed() + ', 255)';
+				},
+				input: function(o){
+					if(o.type !== 'M')
+						return false;
+					this.consumeCooldown = 20;
+					return true;
+				}
+			}
 		];
 		var currentTool = -1;
 		var currentRotation = 0;
@@ -266,7 +347,7 @@
 						}
 						else{
 							// If mouse button is clicked without any tool selected, add object at the clicked position.
-							newObject(c, r);
+							newObject(c, r, 'O');
 						}
 						updateTile(board[c + r * size]);
 						return false;
@@ -400,12 +481,12 @@
 		}
 
 		/// Insert an object on the board.  It could fail if there's already some object at the position.
-		function newObject(c, r){
-			var obj = {x: c * tilesize + tilesize / 2, y: r * tilesize + tilesize / 2};
+		function newObject(c, r, type){
+			var obj = {id: serialNo++, type: type, x: c * tilesize + tilesize / 2, y: r * tilesize + tilesize / 2};
 			if(hitCheck(obj.x, obj.y))
 				return false;
 			obj.elem = document.createElement('div');
-			obj.elem.innerHTML = 'o' + serialNo++;
+			obj.elem.innerHTML = type;
 			obj.elem.style.position = 'absolute';
 			obj.elem.style.left = obj.x + 'px';
 			obj.elem.style.top = obj.y + 'px';
