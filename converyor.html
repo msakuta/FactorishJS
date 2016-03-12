@@ -303,7 +303,7 @@
 			var ix = idx % size;
 			var iy = Math.floor(idx / size);
 			selectedCoords = [ix, iy];
-			if(ix < size-1 && iy < size-1){
+			if(ix < size && iy < size){
 				if(!cursorElem){
 					cursorElem = document.createElement('div');
 					cursorElem.style.border = '2px blue solid';
