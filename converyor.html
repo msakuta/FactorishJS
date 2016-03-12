@@ -88,13 +88,62 @@
 		var toolBarElem;
 		var toolElems = [];
 		var toolDefs = [
+			// Transport belt
 			{
-				// Transport belt
 				symbol: ["&lt;", "^", "&gt;", "V"],
+
+				// Function to respond when an object is on it.
+				objectResponse: function(tile, o){
+					var vx = [-1, 0, 1, 0][tile.rotation];
+					var vy = [0, -1, 0, 1][tile.rotation];
+					var newx = Math.min(size * tilesize, Math.max(0, o.x + vx));
+					var newy = Math.min(size * tilesize, Math.max(0, o.y + vy));
+					if(hitCheck(newx, newy, o))
+						return;
+					o.x = newx;
+					o.y = newy;
+					o.elem.style.left = o.x + 'px';
+					o.elem.style.top = o.y + 'px';
+				}
 			},
 			{
 				// Inserter
 				symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
+
+				// Function that is called for every tile every simulation step.
+				frameProc: function(tile){
+					if(simstep % 10 !== 0)
+						return;
+					var idx = board.indexOf(tile);
+					var tx = idx % size;
+					var ty = Math.floor(idx / size);
+
+					var vx = [-1, 0, 1, 0][tile.rotation];
+					var vy = [0, -1, 0, 1][tile.rotation];
+					var sx = tx - vx;
+					var sy = ty - vy;
+					var sourceTile = board[sx + sy * size];
+					var dx = tx + vx;
+					var dy = ty + vy;
+					var destTile = board[dx + dy * size];
+					// If the source is a producer and destination is a transport belt, put a product into the belt.
+					if(sourceTile.type === toolDefs[2] && destTile.type == toolDefs[0]){
+						newObject(dx, dy);
+					}
+					// If the destinatoin is a destroyer, put the object into the destroyer and cosume it.
+					if(destTile.type === toolDefs[3]){
+						for(var j = 0; j < objects.length; j++){
+							var o = objects[j];
+							var otx = Math.floor(o.x / tilesize);
+							var oty = Math.floor(o.y / tilesize);
+							if(otx === sx && oty === sy){
+								table.removeChild(o.elem);
+								objects.splice(j, 1);
+								break;
+							}
+						}
+					}
+				}
 			},
 			// Producer
 			{ symbol: 'P' },
@@ -381,51 +430,16 @@
 				var tx = Math.floor(o.x / tilesize);
 				var ty = Math.floor(o.y / tilesize);
 				var tile = board[tx + ty * size];
-				if(tile.type === toolDefs[0]){
-					var vx = [-1, 0, 1, 0][tile.rotation];
-					var vy = [0, -1, 0, 1][tile.rotation];
-					var newx = Math.min(size * tilesize, Math.max(0, o.x + vx));
-					var newy = Math.min(size * tilesize, Math.max(0, o.y + vy));
-					if(hitCheck(newx, newy, o))
-						continue;
-					o.x = newx;
-					o.y = newy;
-					o.elem.style.left = o.x + 'px';
-					o.elem.style.top = o.y + 'px';
-				}
+				if(tile.type && tile.type.objectResponse)
+					tile.type.objectResponse(tile, o);
 			}
 
 			for(var ty = 0; ty < size; ty++){
 				for(var tx = 0; tx < size; tx++){
 					var tile = board[tx + ty * size];
 					// Inserters work once in ten simsteps
-					if(tile.type === toolDefs[1] && simstep % 10 == 0){
-						var vx = [-1, 0, 1, 0][tile.rotation];
-						var vy = [0, -1, 0, 1][tile.rotation];
-						var sx = tx - vx;
-						var sy = ty - vy;
-						var sourceTile = board[sx + sy * size];
-						var dx = tx + vx;
-						var dy = ty + vy;
-						var destTile = board[dx + dy * size];
-						// If the source is a producer and destination is a transport belt, put a product into the belt.
-						if(sourceTile.type === toolDefs[2] && destTile.type == toolDefs[0]){
-							newObject(dx, dy);
-						}
-						// If the destinatoin is a destroyer, putthe biject
-						if(destTile.type === toolDefs[3]){
-							for(var j = 0; j < objects.length; j++){
-								var o = objects[j];
-								var otx = Math.floor(o.x / tilesize);
-								var oty = Math.floor(o.y / tilesize);
-								if(otx === sx && oty === sy){
-									table.removeChild(o.elem);
-									objects.splice(j, 1);
-									break;
-								}
-							}
-						}
-					}
+					if(tile.type && tile.type.frameProc)
+						tile.type.frameProc(tile);
 				}
 			}
 
