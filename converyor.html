@@ -98,13 +98,17 @@
 					var vy = [0, -1, 0, 1][tile.rotation];
 					var newx = Math.min(size * tilesize, Math.max(0, o.x + vx));
 					var newy = Math.min(size * tilesize, Math.max(0, o.y + vy));
-					if(hitCheck(newx, newy, o))
+					if(!movableTile(newx, newy) || hitCheck(newx, newy, o))
 						return;
 					o.x = newx;
 					o.y = newy;
 					o.elem.style.left = o.x + 'px';
 					o.elem.style.top = o.y + 'px';
-				}
+				},
+
+				movable: function(tile){
+					return true;
+				},
 			},
 
 			// Inserter
@@ -467,6 +471,18 @@
 		}
 
 		var serialNo = 0;
+
+		/// Check whether given tile allow objects on it, e.g. transport belts
+		function movableTile(x, y){
+			var tx = Math.floor(x / tilesize);
+			var ty = Math.floor(y / tilesize);
+			if(tx < 0 || size < tx || ty < 0 || size < ty)
+				return false;
+			// Ojects should not be placed on an empty tile
+			if(!board[tx + ty * size].type)
+				return false;
+			return board[tx + ty * size].type.movable && board[tx + ty * size].type.movable();
+		}
 
 		/// Check whether given coordinates hits some object
 		function hitCheck(x, y, ignore){
