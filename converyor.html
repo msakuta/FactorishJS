@@ -81,6 +81,7 @@
 		var cursorElem;
 		var messageElem;
 		var debugText;
+		var infoElem;
 
 		// Constants
 		var tilesize = 32;
@@ -90,6 +91,7 @@
 		var toolDefs = [
 			// Transport belt
 			{
+				name: "Transport Belt",
 				symbol: ["&lt;", "^", "&gt;", "V"],
 
 				// Function to respond when an object is on it.
@@ -113,6 +115,7 @@
 
 			// Inserter
 			{
+				name: "Inserter",
 				symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
 
 				// Function that is called for every tile every simulation step.
@@ -164,20 +167,28 @@
 				}
 			},
 			// Ore Mine
-			{ symbol: 'Mi',
+			{
+				name: "Ore Mine",
+				symbol: 'Mi',
+
+				desc: function(tile){
+					return "Outputs: Ore<br>" +
+						"Time: 50";
+				},
+
 				frameProc: function(tile){
 					if(tile.cooldown === undefined || tile.cooldown < 1)
 						tile.cooldown = 0;
 					else
 						tile.cooldown--;
 					var elem = tileElems[board.indexOf(tile)];
-					elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - tile.cooldown / 20) * 255).toFixed() + ')';
+					elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - tile.cooldown / 50) * 255).toFixed() + ')';
 				},
 				output: function(dx, dy){
 					if(0 < this.cooldown)
 						return false;
 					if(newObject(dx, dy, 'O')){
-						this.cooldown = 20;
+						this.cooldown = 50;
 						return true;
 					}
 					else
@@ -186,7 +197,17 @@
 			},
 
 			// Furnace
-			{ symbol: 'F',
+			{
+				name: "Furnace",
+				symbol: 'F',
+
+				desc: function(tile){
+					return "Inputs: Ore<br>" +
+						"&nbsp;&nbsp;x " + (tile.inputMetals || 0) + "<br>" +
+						"Outputs: Metal plate<br>" +
+						"Time: 20";
+				},
+
 				frameProc: function(tile){
 					if(tile.cooldown === undefined || tile.cooldown < 1)
 						tile.cooldown = 0;
@@ -197,19 +218,23 @@
 					else
 						tile.consumeCooldown--;
 					var elem = tileElems[board.indexOf(tile)];
-					elem.style.backgroundColor = 'rgb(255, ' + ((1 - tile.consumeCooldown / 20) * 255).toFixed() + ', ' + ((1 - tile.cooldown / 20) * 255).toFixed() + ')';
+					elem.style.backgroundColor = 'rgb(255, ' + ((1 - tile.consumeCooldown / 20) * 255).toFixed() + ', ' + ((1 - tile.cooldown / 70) * 255).toFixed() + ')';
 				},
 				input: function(o){
 					if(o.type !== 'O')
 						return false;
 					this.consumeCooldown = 20;
+					this.inputMetals = (this.inputMetals || 0) + 1;
 					return true;
 				},
 				output: function(dx, dy){
 					if(0 < this.cooldown)
 						return false;
+					if(!this.inputMetals)
+						return false;
 					if(newObject(dx, dy, 'M')){
-						this.cooldown = 20;
+						this.cooldown = 70;
+						this.inputMetals--;
 						return true;
 					}
 					else
@@ -218,7 +243,9 @@
 			},
 
 			// Destroyer
-			{ symbol: 'D',
+			{
+				name: "Destroyer",
+				symbol: 'D',
 				frameProc: function(tile){
 					if(tile.consumeCooldown === undefined || tile.consumeCooldown < 1)
 						tile.consumeCooldown = 0;
@@ -273,6 +300,8 @@
 				run();
 			}, 50);
 		}
+
+		window.addEventListener('resize', onSize);
 
 		/// Update single tile graphics to match internal data
 		function updateTile(tile){
@@ -427,8 +456,40 @@
 
 			selectTool(-1);
 
+			infoElem = document.createElement('div');
+			infoElem.style.position = 'absolute';
+			infoElem.style.backgroundColor = '#ffff7f';
+			infoElem.style.border = '1px solid #00f';
+			container.appendChild(infoElem);
+
+			onSize();
+
 			debugText = document.createElement('div');
 			container.appendChild(debugText);
+		}
+
+		function onSize(){
+			var tableRect = table.getBoundingClientRect();
+			var rect = infoElem.getBoundingClientRect();
+			infoElem.style.left = (tableRect.right + 20) + 'px';
+			infoElem.style.top = '0px';
+			infoElem.style.width = '150px';
+			infoElem.style.height = tableRect.height + 'px';
+			infoElem.style.textAlign = 'left';
+		}
+
+		function updateInfo(){
+			if(!selectedCoords){
+				infoElem.innerHTML = 'Empty tile';
+				return;
+			}
+			var tile = board[selectedCoords[0] + selectedCoords[1] * size];
+			if(!tile || !tile.type){
+				infoElem.innerHTML = 'Empty tile';
+				return;
+			}
+			infoElem.innerHTML = 'Type: ' + tile.type.name + '<br>' +
+				(tile.type.desc ? tile.type.desc(tile) : "");
 		}
 
 		function selectTile(sel){
@@ -449,6 +510,7 @@
 				cursorElem.style.left = (32.0 * ix + 4) + 'px';
 				cursorElem.style.width = '30px';
 				cursorElem.style.height = '30px';
+				updateInfo();
 			}
 		}
 
@@ -539,6 +601,8 @@
 						tile.type.frameProc(tile);
 				}
 			}
+
+			updateInfo();
 
 			simstep++;
 		}
