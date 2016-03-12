@@ -17,6 +17,7 @@
 
 			#container{
 				position: relative;
+				line-height: 80%;
 			}
 
 			#points{
@@ -88,9 +89,16 @@
 		var toolElems = [];
 		var toolDefs = [
 			{
+				// Transport belt
 				symbol: ["&lt;", "^", "&gt;", "V"],
 			},
+			{
+				// Inserter
+				symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
+			},
+			// Producer
 			{ symbol: 'P' },
+			// Destroyer
 			{ symbol: 'D' }
 		];
 		var currentTool = -1;
@@ -209,14 +217,7 @@
 						}
 						else{
 							// If mouse button is clicked without any tool selected, add object at the clicked position.
-							var obj = {x: c * tilesize, y: r * tilesize};
-							obj.elem = document.createElement('div');
-							obj.elem.innerHTML = 'o' + objects.length;
-							obj.elem.style.position = 'absolute';
-							obj.elem.style.left = c * tilesize + 'px';
-							obj.elem.style.top = r * tilesize + 'px';
-							table.appendChild(obj.elem);
-							objects.push(obj);
+							newObject(c, r);
 						}
 						updateTile(board[c + r * size]);
 						return false;
@@ -335,6 +336,41 @@
 			};
 		}
 
+		var serialNo = 0;
+
+		/// Check whether given coordinates hits some object
+		function hitCheck(x, y, ignore){
+			for(var j = 0; j < objects.length; j++){
+				var jo = objects[j];
+				if(ignore === jo)
+					continue;
+				if(Math.abs(x - jo.x) < 16 && Math.abs(y - jo.y) < 16)
+					return true;
+			}
+			return false;
+		}
+
+		/// Insert an object on the board.  It could fail if there's already some object at the position.
+		function newObject(c, r){
+			var obj = {x: c * tilesize + tilesize / 2, y: r * tilesize + tilesize / 2};
+			if(hitCheck(obj.x, obj.y))
+				return false;
+			obj.elem = document.createElement('div');
+			obj.elem.innerHTML = 'o' + serialNo++;
+			obj.elem.style.position = 'absolute';
+			obj.elem.style.left = obj.x + 'px';
+			obj.elem.style.top = obj.y + 'px';
+			// Disable mouse events since we don't want an object to catch mouse event when
+			// we're adding a structure to a tile.
+			obj.elem.style.pointerEvents = 'none';
+			obj.elem.setAttribute('class', 'noselect');
+			table.appendChild(obj.elem);
+			objects.push(obj);
+			return true;
+		}
+
+		var simstep = 0;
+
 		/// Simulation step function
 		function run(){
 			// Iterate all floating objects to update
@@ -348,12 +384,52 @@
 				if(tile.type === toolDefs[0]){
 					var vx = [-1, 0, 1, 0][tile.rotation];
 					var vy = [0, -1, 0, 1][tile.rotation];
-					o.x = Math.min(size * tilesize, Math.max(0, o.x + vx));
-					o.y = Math.min(size * tilesize, Math.max(0, o.y + vy));
+					var newx = Math.min(size * tilesize, Math.max(0, o.x + vx));
+					var newy = Math.min(size * tilesize, Math.max(0, o.y + vy));
+					if(hitCheck(newx, newy, o))
+						continue;
+					o.x = newx;
+					o.y = newy;
 					o.elem.style.left = o.x + 'px';
 					o.elem.style.top = o.y + 'px';
 				}
 			}
+
+			for(var ty = 0; ty < size; ty++){
+				for(var tx = 0; tx < size; tx++){
+					var tile = board[tx + ty * size];
+					// Inserters work once in ten simsteps
+					if(tile.type === toolDefs[1] && simstep % 10 == 0){
+						var vx = [-1, 0, 1, 0][tile.rotation];
+						var vy = [0, -1, 0, 1][tile.rotation];
+						var sx = tx - vx;
+						var sy = ty - vy;
+						var sourceTile = board[sx + sy * size];
+						var dx = tx + vx;
+						var dy = ty + vy;
+						var destTile = board[dx + dy * size];
+						// If the source is a producer and destination is a transport belt, put a product into the belt.
+						if(sourceTile.type === toolDefs[2] && destTile.type == toolDefs[0]){
+							newObject(dx, dy);
+						}
+						// If the destinatoin is a destroyer, putthe biject
+						if(destTile.type === toolDefs[3]){
+							for(var j = 0; j < objects.length; j++){
+								var o = objects[j];
+								var otx = Math.floor(o.x / tilesize);
+								var oty = Math.floor(o.y / tilesize);
+								if(otx === sx && oty === sy){
+									table.removeChild(o.elem);
+									objects.splice(j, 1);
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			simstep++;
 		}
 
 		</script>
