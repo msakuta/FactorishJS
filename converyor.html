@@ -88,180 +88,204 @@
 
 		var toolBarElem;
 		var toolElems = [];
-		var toolDefs = [
-			// Transport belt
-			{
-				name: "Transport Belt",
-				symbol: ["&lt;", "^", "&gt;", "V"],
 
-				// Function to respond when an object is on it.
-				objectResponse: function(tile, o){
-					var vx = [-1, 0, 1, 0][tile.rotation];
-					var vy = [0, -1, 0, 1][tile.rotation];
-					var newx = Math.min(size * tilesize, Math.max(0, o.x + vx));
-					var newy = Math.min(size * tilesize, Math.max(0, o.y + vy));
-					if(!movableTile(newx, newy) || hitCheck(newx, newy, o))
-						return;
-					o.x = newx;
-					o.y = newy;
-					o.elem.style.left = o.x + 'px';
-					o.elem.style.top = o.y + 'px';
-				},
+		// Transport belt
+		function TransportBelt(){}
+		TransportBelt.prototype = {
+			name: "Transport Belt",
+			symbol: ["&lt;", "^", "&gt;", "V"],
 
-				movable: function(tile){
-					return true;
-				},
+			// Function to respond when an object is on it.
+			objectResponse: function(tile, o){
+				var vx = [-1, 0, 1, 0][tile.rotation];
+				var vy = [0, -1, 0, 1][tile.rotation];
+				var newx = Math.min(size * tilesize, Math.max(0, o.x + vx));
+				var newy = Math.min(size * tilesize, Math.max(0, o.y + vy));
+				if(!movableTile(newx, newy) || hitCheck(newx, newy, o))
+					return;
+				o.x = newx;
+				o.y = newy;
+				o.elem.style.left = o.x + 'px';
+				o.elem.style.top = o.y + 'px';
 			},
 
-			// Inserter
-			{
-				name: "Inserter",
-				symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
+			movable: function(tile){
+				return true;
+			},
+		};
 
-				// Function that is called for every tile every simulation step.
-				frameProc: function(tile){
-					if(tile.cooldown === undefined || tile.cooldown < 1)
-						tile.cooldown = 0;
-					else
-						tile.cooldown--;
-					var elem = tileElems[board.indexOf(tile)];
-					elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - tile.cooldown / 10) * 255).toFixed() + ')';
+		// Inserter
+		function Inserter(){
+			this.cooldown = 0;
+		}
+		Inserter.prototype = {
+			name: "Inserter",
+			symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
 
-					if(0 < tile.cooldown)
+			// Function that is called for every tile every simulation step.
+			frameProc: function(){
+				if(this.cooldown < 1)
+					this.cooldown = 0;
+				else
+					this.cooldown--;
+				var elem = tileElems[board.indexOf(this)];
+				elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - this.cooldown / 10) * 255).toFixed() + ')';
+
+				if(0 < this.cooldown)
+					return;
+				var idx = board.indexOf(this);
+				var tx = idx % size;
+				var ty = Math.floor(idx / size);
+
+				var vx = [-1, 0, 1, 0][this.rotation];
+				var vy = [0, -1, 0, 1][this.rotation];
+				var sx = tx - vx;
+				var sy = ty - vy;
+				var sourceTile = board[sx + sy * size];
+				var dx = tx + vx;
+				var dy = ty + vy;
+				var destTile = board[dx + dy * size];
+
+				// If the source is a producer and destination is a transport belt, put a product into the belt.
+				if(sourceTile.type && sourceTile.type.output){
+//						if(sourceTile.type.output.call(sourceTile, dx, dy)){
+					if(sourceTile.output(dx, dy)){
+						this.cooldown = 10;
 						return;
-					var idx = board.indexOf(tile);
-					var tx = idx % size;
-					var ty = Math.floor(idx / size);
+					}
+				}
 
-					var vx = [-1, 0, 1, 0][tile.rotation];
-					var vy = [0, -1, 0, 1][tile.rotation];
-					var sx = tx - vx;
-					var sy = ty - vy;
-					var sourceTile = board[sx + sy * size];
-					var dx = tx + vx;
-					var dy = ty + vy;
-					var destTile = board[dx + dy * size];
-
-					// If the source is a producer and destination is a transport belt, put a product into the belt.
-					if(sourceTile.type && sourceTile.type.output){
-						if(sourceTile.type.output.call(sourceTile, dx, dy)){
-							tile.cooldown = 10;
+				// If the destinatoin is a destroyer, put the object into the destroyer and cosume it.
+				if(destTile.type && destTile.type.input){
+					for(var j = 0; j < objects.length; j++){
+						var o = objects[j];
+						var otx = Math.floor(o.x / tilesize);
+						var oty = Math.floor(o.y / tilesize);
+						if(otx === sx && oty === sy && destTile.input(o)){
+							table.removeChild(o.elem);
+							objects.splice(j, 1);
+							this.cooldown = 10;
 							return;
 						}
 					}
-
-					// If the destinatoin is a destroyer, put the object into the destroyer and cosume it.
-					if(destTile.type && destTile.type.input){
-						for(var j = 0; j < objects.length; j++){
-							var o = objects[j];
-							var otx = Math.floor(o.x / tilesize);
-							var oty = Math.floor(o.y / tilesize);
-							if(otx === sx && oty === sy && destTile.type.input.call(destTile, o)){
-								table.removeChild(o.elem);
-								objects.splice(j, 1);
-								tile.cooldown = 10;
-								return;
-							}
-						}
-					}
-				}
-			},
-			// Ore Mine
-			{
-				name: "Ore Mine",
-				symbol: 'Mi',
-
-				desc: function(tile){
-					return "Outputs: Ore<br>" +
-						"Time: 50";
-				},
-
-				frameProc: function(tile){
-					if(tile.cooldown === undefined || tile.cooldown < 1)
-						tile.cooldown = 0;
-					else
-						tile.cooldown--;
-					var elem = tileElems[board.indexOf(tile)];
-					elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - tile.cooldown / 50) * 255).toFixed() + ')';
-				},
-				output: function(dx, dy){
-					if(0 < this.cooldown)
-						return false;
-					if(newObject(dx, dy, 'O')){
-						this.cooldown = 50;
-						return true;
-					}
-					else
-						return false;
-				}
-			},
-
-			// Furnace
-			{
-				name: "Furnace",
-				symbol: 'F',
-
-				desc: function(tile){
-					return "Inputs: Ore<br>" +
-						"&nbsp;&nbsp;x " + (tile.inputMetals || 0) + "<br>" +
-						"Outputs: Metal plate<br>" +
-						"Time: 20";
-				},
-
-				frameProc: function(tile){
-					if(tile.cooldown === undefined || tile.cooldown < 1)
-						tile.cooldown = 0;
-					else
-						tile.cooldown--;
-					if(tile.consumeCooldown === undefined || tile.consumeCooldown < 1)
-						tile.consumeCooldown = 0;
-					else
-						tile.consumeCooldown--;
-					var elem = tileElems[board.indexOf(tile)];
-					elem.style.backgroundColor = 'rgb(255, ' + ((1 - tile.consumeCooldown / 20) * 255).toFixed() + ', ' + ((1 - tile.cooldown / 70) * 255).toFixed() + ')';
-				},
-				input: function(o){
-					if(o.type !== 'O')
-						return false;
-					this.consumeCooldown = 20;
-					this.inputMetals = (this.inputMetals || 0) + 1;
-					return true;
-				},
-				output: function(dx, dy){
-					if(0 < this.cooldown)
-						return false;
-					if(!this.inputMetals)
-						return false;
-					if(newObject(dx, dy, 'M')){
-						this.cooldown = 70;
-						this.inputMetals--;
-						return true;
-					}
-					else
-						return false;
-				}
-			},
-
-			// Destroyer
-			{
-				name: "Destroyer",
-				symbol: 'D',
-				frameProc: function(tile){
-					if(tile.consumeCooldown === undefined || tile.consumeCooldown < 1)
-						tile.consumeCooldown = 0;
-					else
-						tile.consumeCooldown--;
-					var elem = tileElems[board.indexOf(tile)];
-					elem.style.backgroundColor = 'rgb(255, ' + ((1 - tile.consumeCooldown / 20) * 255).toFixed() + ', 255)';
-				},
-				input: function(o){
-					if(o.type !== 'M')
-						return false;
-					this.consumeCooldown = 20;
-					return true;
 				}
 			}
+		};
+
+		// Ore Mine
+		function OreMine(){
+			this.cooldown = 0;
+		}
+		OreMine.prototype = {
+			name: "Ore Mine",
+			symbol: 'Mi',
+
+			desc: function(tile){
+				return "Outputs: Ore<br>" +
+					"Time: 50";
+			},
+
+			frameProc: function(){
+				if(this.cooldown < 1)
+					this.cooldown = 0;
+				else
+					this.cooldown--;
+				var elem = tileElems[board.indexOf(this)];
+				elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - this.cooldown / 50) * 255).toFixed() + ')';
+			},
+			output: function(dx, dy){
+				if(0 < this.cooldown)
+					return false;
+				if(newObject(dx, dy, 'O')){
+					this.cooldown = 50;
+					return true;
+				}
+				else
+					return false;
+			}
+		};
+
+		// Furnace
+		function Furnace(){
+			this.cooldown = 0;
+			this.consumeCooldown = 0;
+		}
+		Furnace.prototype = {
+			name: "Furnace",
+			symbol: 'F',
+
+			desc: function(tile){
+				return "Inputs: Ore<br>" +
+					"&nbsp;&nbsp;x " + (tile.inputMetals || 0) + "<br>" +
+					"Outputs: Metal plate<br>" +
+					"Time: 20";
+			},
+
+			frameProc: function(){
+				if(this.cooldown < 1)
+					this.cooldown = 0;
+				else
+					this.cooldown--;
+				if(this.consumeCooldown < 1)
+					this.consumeCooldown = 0;
+				else
+					this.consumeCooldown--;
+				var elem = tileElems[board.indexOf(this)];
+				elem.style.backgroundColor = 'rgb(255, ' + ((1 - this.consumeCooldown / 20) * 255).toFixed() + ', ' + ((1 - this.cooldown / 70) * 255).toFixed() + ')';
+			},
+			input: function(o){
+				if(o.type !== 'O')
+					return false;
+				this.consumeCooldown = 20;
+				this.inputMetals = (this.inputMetals || 0) + 1;
+				return true;
+			},
+			output: function(dx, dy){
+				if(0 < this.cooldown)
+					return false;
+				if(!this.inputMetals)
+					return false;
+				if(newObject(dx, dy, 'M')){
+					this.cooldown = 70;
+					this.inputMetals--;
+					return true;
+				}
+				else
+					return false;
+			}
+		};
+
+		// Destroyer
+		function Destroyer(){
+			this.consumeCooldown = 0;
+		}
+		Destroyer.prototype = {
+			name: "Destroyer",
+			symbol: 'D',
+			frameProc: function(tile){
+				if(tile.consumeCooldown < 1)
+					tile.consumeCooldown = 0;
+				else
+					tile.consumeCooldown--;
+				var elem = tileElems[board.indexOf(tile)];
+				elem.style.backgroundColor = 'rgb(255, ' + ((1 - tile.consumeCooldown / 20) * 255).toFixed() + ', 255)';
+			},
+			input: function(o){
+				if(o.type !== 'M')
+					return false;
+				this.consumeCooldown = 20;
+				return true;
+			}
+		};
+
+		var toolDefs = [
+			TransportBelt,
+			Inserter,
+			OreMine,
+			Furnace,
+			Destroyer,
 		];
+
 		var currentTool = -1;
 		var currentRotation = 0;
 
@@ -322,7 +346,7 @@
 
 		function updateTool(tool){
 			if(0 <= tool && tool < toolElems.length)
-			toolElems[tool].innerHTML = toolDefs[tool].symbol instanceof Array ? toolDefs[tool].symbol[currentRotation] : toolDefs[tool].symbol;
+				toolElems[tool].innerHTML = toolDefs[tool].prototype.symbol instanceof Array ? toolDefs[tool].prototype.symbol[currentRotation] : toolDefs[tool].prototype.symbol;
 		}
 
 		function createElements(){
@@ -375,7 +399,11 @@
 							board[c + r * size].type = null;
 						}
 						else if(0 <= currentTool && currentTool < toolDefs.length){
-							board[c + r * size].type = toolDefs[currentTool];
+							// Probably the tile and the structure built on it should be different
+							// object, because it would force us to recreate and replace existing tile object
+							// everytime structure is built on it.
+							board[c + r * size] = new toolDefs[currentTool];
+							board[c + r * size].type = toolDefs[currentTool].prototype;
 							board[c + r * size].rotation = currentRotation;
 						}
 						else{
@@ -449,7 +477,7 @@
 				toolBarElem.appendChild(toolElem);
 				// Disable text selection
 				toolElem.setAttribute("class", "noselect");
-				toolElem.innerHTML = toolDefs[i].symbol instanceof Array ? toolDefs[i].symbol[0] : toolDefs[i].symbol;
+				toolElem.innerHTML = toolDefs[i].prototype.symbol instanceof Array ? toolDefs[i].prototype.symbol[0] : toolDefs[i].prototype.symbol;
 			}
 			// Set the margin after contents are initialized
 			toolBarElem.style.marginLeft = (-toolBarElem.getBoundingClientRect().width / 2) + 'px';
@@ -596,9 +624,8 @@
 			for(var ty = 0; ty < size; ty++){
 				for(var tx = 0; tx < size; tx++){
 					var tile = board[tx + ty * size];
-					// Inserters work once in ten simsteps
-					if(tile.type && tile.type.frameProc)
-						tile.type.frameProc(tile);
+					if(tile.frameProc)
+						tile.frameProc(tile);
 				}
 			}
 
