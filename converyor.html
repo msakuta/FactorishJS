@@ -242,8 +242,56 @@ function inherit(subclass,base,methods){
 			}
 		});
 
+		/// Abstract class for structures that can contain items
+		function Container(){
+			Structure.call(this);
+			this.inventory = {};
+		}
+		inherit(Container, Structure);
+
+		Container.prototype.input = function(o){
+			this.addItem(o);
+			return true;
+		};
+
+		Container.prototype.output = function(dx, dy){
+			var firstItem = null;
+			for(var i in this.inventory)
+				firstItem = i;
+			if(!firstItem)
+				return false;
+			if(newObject(dx, dy, firstItem)){
+				if(--this.inventory[firstItem].amount === 0)
+					delete this.inventory[firstItem];
+				return true;
+			}
+			return false;
+		};
+
+		Container.prototype.addItem = function(item){
+			if(!(item.type in this.inventory))
+				this.inventory[item.type] = {type: item.type, amount: item.amount || 1};
+			else
+				this.inventory[item.type].amount += item.amount || 1;
+		};
+
+		function Chest(){
+			Container.call(this);
+		}
+		inherit(Chest, Container, {
+			name: "Chest",
+			symbol: 'C',
+			desc: function(tile){
+				var ret = "Items:<br>";
+				for(var i in this.inventory)
+					ret += "  " + this.inventory[i].type + ": " + this.inventory[i].amount + "<br>";
+				return ret;
+			},
+		});
+
 		// Ore Mine
 		function OreMine(){
+			Structure.call(this);
 			this.cooldown = 0;
 		}
 		inherit(OreMine, Structure, {
@@ -355,6 +403,7 @@ function inherit(subclass,base,methods){
 		var toolDefs = [
 			TransportBelt,
 			Inserter,
+			Chest,
 			OreMine,
 			Furnace,
 			Destroyer,
