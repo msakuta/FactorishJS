@@ -82,6 +82,7 @@
 		var messageElem;
 		var debugText;
 		var infoElem;
+		var playerElem;
 
 		// Constants
 		var tilesize = 32;
@@ -89,6 +90,9 @@
 
 		var toolBarElem;
 		var toolElems = [];
+
+		// Placeholder object for player
+		var player = {inventory: {}, selectedInventory: null};
 
 /// Mix fields of source into target.
 /// This can be used like a dirty multiple inheritance.
@@ -261,7 +265,7 @@ function inherit(subclass,base,methods){
 			if(!firstItem)
 				return false;
 			if(newObject(dx, dy, firstItem)){
-				if(--this.inventory[firstItem].amount === 0)
+				if(--this.inventory[firstItem] === 0)
 					delete this.inventory[firstItem];
 				return true;
 			}
@@ -270,9 +274,9 @@ function inherit(subclass,base,methods){
 
 		Container.prototype.addItem = function(item){
 			if(!(item.type in this.inventory))
-				this.inventory[item.type] = {type: item.type, amount: item.amount || 1};
+				this.inventory[item.type] = item.amount || 1;
 			else
-				this.inventory[item.type].amount += item.amount || 1;
+				this.inventory[item.type] += item.amount || 1;
 		};
 
 		function Chest(){
@@ -284,7 +288,7 @@ function inherit(subclass,base,methods){
 			desc: function(tile){
 				var ret = "Items:<br>";
 				for(var i in this.inventory)
-					ret += "  " + this.inventory[i].type + ": " + this.inventory[i].amount + "<br>";
+					ret += "  " + i + ": " + this.inventory[i] + "<br>";
 				return ret;
 			},
 		});
@@ -455,6 +459,17 @@ function inherit(subclass,base,methods){
 
 			generateBoard();
 
+			// Initial inventory of player
+			player.inventory['O'] = 50;
+			player.inventory['M'] = 10;
+			player.inventory['Transport Belt'] = 20;
+			player.inventory['Inserter'] = 10;
+			player.inventory['Chest'] = 10;
+			player.inventory['Ore Mine'] = 5;
+			player.inventory['Furnace'] = 3;
+			player.inventory['Destroyer'] = 3;
+			updatePlayer();
+
 			// Set animation update function
 			window.setInterval(function(){
 				run();
@@ -485,6 +500,26 @@ function inherit(subclass,base,methods){
 		function updateTool(tool){
 			if(0 <= tool && tool < toolElems.length)
 				toolElems[tool].innerHTML = toolDefs[tool].prototype.symbol instanceof Array ? toolDefs[tool].prototype.symbol[currentRotation] : toolDefs[tool].prototype.symbol;
+		}
+
+		function harvest(tile){
+			if(tile.structure){
+				if(tile.structure.inventory){
+					for(var i in tile.structure.inventory){
+						var v = tile.structure.inventory[i];
+						if(i in player.inventory)
+							player.inventory[i] += v;
+						else
+							player.inventory[i] = v;
+					}
+				}
+				if(tile.structure.name in player.inventory)
+					player.inventory[tile.structure.name]++;
+				else
+					player.inventory[tile.structure.name] = 1;
+				tile.structure = null;
+				updatePlayer();
+			}
 		}
 
 		function createElements(){
@@ -535,19 +570,25 @@ function inherit(subclass,base,methods){
 						var r = Math.floor(idx / size);
 
 						if(e.button !== 0){
-							board[c + r * size].structure = null;
+							harvest(board[c + r * size]);
 						}
 						else if(0 <= currentTool && currentTool < toolDefs.length){
+							var tool = toolDefs[currentTool];
+							if(!(tool.prototype.name in player.inventory) || !player.inventory[tool.prototype.name])
+								return;
+							harvest(board[c + r * size]);
 							// The tile and the structure built on it should be different
 							// object, because it would force us to recreate and replace existing tile object
 							// everytime structure is built on it.
-							board[c + r * size].structure = new toolDefs[currentTool];
+							board[c + r * size].structure = new tool;
 							board[c + r * size].structure.tile = board[c + r * size];
 							board[c + r * size].structure.rotation = currentRotation;
+							if(--player.inventory[tool.prototype.name] === 0)
+								delete player.inventory[tool.prototype.name];
+							updatePlayer();
 						}
 						else{
-							// If mouse button is clicked without any tool selected, add object at the clicked position.
-							newObject(c, r, 'O');
+							// If mouse button is clicked without any tool selected, try to open it (WIP).
 						}
 						updateTile(board[c + r * size]);
 						return false;
@@ -631,6 +672,19 @@ function inherit(subclass,base,methods){
 			infoElem.style.border = '1px solid #00f';
 			container.appendChild(infoElem);
 
+			playerElem = document.createElement('div');
+			playerElem.style.borderStyle = 'solid';
+			playerElem.style.borderWidth = '1px';
+			playerElem.style.border = '1px solid #00f';
+			playerElem.style.backgroundColor = '#ffff7f';
+			playerElem.style.position = 'relative';
+			playerElem.style.margin = '3px';
+			playerElem.style.left = '50%';
+			playerElem.style.width = (320) + 'px';
+			playerElem.style.height = (160) + 'px';
+			container.appendChild(playerElem);
+			playerElem.style.marginLeft = (-playerElem.getBoundingClientRect().width / 2) + 'px';
+
 			onSize();
 
 			debugText = document.createElement('div');
@@ -660,6 +714,42 @@ function inherit(subclass,base,methods){
 			}
 			infoElem.innerHTML = 'Type: ' + tile.structure.name + '<br>' +
 				(tile.structure.desc ? tile.structure.desc(tile) : "");
+		}
+
+		function updatePlayer(){
+			// Clear the elements first
+			while(playerElem.firstChild)
+				playerElem.removeChild(playerElem.firstChild);
+
+			for(var i in player.inventory){
+				var v = player.inventory[i];
+				var div = document.createElement('div');
+				var img = document.createElement('img');
+				if(i === 'O'){
+					img.src = 'img/ore.png';
+				}
+				else if(i === 'M')
+					img.src = 'img/metal.png';
+				img.style.width = objsize + 'px';
+				img.style.height = objsize + 'px';
+				div.appendChild(img);
+				var text = document.createElement('span');
+				text.innerHTML = v + ' ' + i;
+				div.appendChild(text);
+				div.style.textAlign = 'left';
+				if(player.selectedInventory === i)
+					div.style.backgroundColor = '#00ffff';
+				div.setAttribute('class', 'noselect');
+				div.itemName = i;
+				div.onclick = function(){
+					if(player.selectedInventory !== this.itemName)
+						player.selectedInventory = this.itemName;
+					else
+						player.selectedInventory = null;
+					updatePlayer();
+				};
+				playerElem.appendChild(div);
+			}
 		}
 
 		function selectTile(sel){
