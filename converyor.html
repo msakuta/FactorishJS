@@ -90,25 +90,80 @@
 		var toolBarElem;
 		var toolElems = [];
 
+/// Mix fields of source into target.
+/// This can be used like a dirty multiple inheritance.
+function mixin(target, source){
+	for(var k in source){
+		target[k] = source[k];
+	}
+}
+
+/// Custom inheritance function that prevents the super class's constructor
+/// from being called on inehritance.
+/// Also assigns constructor property of the subclass properly.
+/// @param subclass The constructor of subclass that should be inherit base
+/// @param base The constructor of the base class which subclass's prototype should point to.
+/// @param methods Optional argument for a table containing methods to define for subclass.
+///                The table is mixed-in to subclass, so it won't be a base class of subclass.
+function inherit(subclass,base,methods){
+	// If the browser or ECMAScript supports Object.create, use it
+	// (but don't remember to redirect constructor pointer to subclass)
+	if(Object.create){
+		subclass.prototype = Object.create(base.prototype);
+	}
+	else{
+		var sub = function(){};
+		sub.prototype = base.prototype;
+		subclass.prototype = new sub;
+	}
+	if(methods)
+		mixin(subclass.prototype, methods);
+	subclass.prototype.constructor = subclass;
+}
+
+		function Structure(){
+			this.tile = null;
+		}
+
+		Structure.prototype.draw = function(tileElem){
+			if(this.symbol instanceof Array){
+				tileElem.innerHTML = this.symbol[this.rotation];
+			}
+			else{
+				tileElem.innerHTML = this.symbol;
+			}
+		};
+
+		/// Function to respond when an object is on it.
+		/// Do nothing by default.
+		Structure.prototype.objectResponse = function(tile, o){};
+
+		/// Function that is called for every tile every simulation step.
+		Structure.prototype.frameProc = function(){};
+
+		/// Returns whether this structure can convey items on it.
+		/// Default is false.
+		Structure.prototype.movable = function(){
+			return false;
+		};
+
 		// Transport belt
 		function TransportBelt(){}
-		TransportBelt.prototype = {
+		inherit(TransportBelt, Structure, {
 			name: "Transport Belt",
 			symbol: ["&lt;", "^", "&gt;", "V"],
 
 			draw: function(tileElem){
 				var idx = tileElems.indexOf(tileElem);
-				var tile = board[idx];
 				tileElem.style.backgroundImage = 'url("img/transport.png")';
 				tileElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
-				tileElem.style.transform = 'rotate(' + (tile.rotation * 90 + 180) + 'deg)';
+				tileElem.style.transform = 'rotate(' + (this.rotation * 90 + 180) + 'deg)';
 				tileElem.style.borderStyle = 'none';
 			},
 
-			// Function to respond when an object is on it.
 			objectResponse: function(tile, o){
-				var vx = [-1, 0, 1, 0][tile.rotation];
-				var vy = [0, -1, 0, 1][tile.rotation];
+				var vx = [-1, 0, 1, 0][this.rotation];
+				var vy = [0, -1, 0, 1][this.rotation];
 				var newx = Math.min(size * tilesize, Math.max(0, o.x + vx));
 				var newy = Math.min(size * tilesize, Math.max(0, o.y + vy));
 				if(!movableTile(newx, newy) || hitCheck(newx, newy, o))
@@ -120,7 +175,7 @@
 			},
 
 			frameProc: function(){
-				var idx = board.indexOf(this);
+				var idx = board.indexOf(this.tile);
 				var tileElem = tileElems[idx];
 				tileElem.style.backgroundPosition = simstep % 32 + 'px 0';
 			},
@@ -128,28 +183,27 @@
 			movable: function(tile){
 				return true;
 			},
-		};
+		});
 
 		// Inserter
 		function Inserter(){
 			this.cooldown = 0;
 		}
-		Inserter.prototype = {
+		inherit(Inserter, Structure, {
 			name: "Inserter",
 			symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
 
-			// Function that is called for every tile every simulation step.
 			frameProc: function(){
 				if(this.cooldown < 1)
 					this.cooldown = 0;
 				else
 					this.cooldown--;
-				var elem = tileElems[board.indexOf(this)];
+				var elem = tileElems[board.indexOf(this.tile)];
 				elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - this.cooldown / 10) * 255).toFixed() + ')';
 
 				if(0 < this.cooldown)
 					return;
-				var idx = board.indexOf(this);
+				var idx = board.indexOf(this.tile);
 				var tx = idx % size;
 				var ty = Math.floor(idx / size);
 
@@ -163,21 +217,21 @@
 				var destTile = board[dx + dy * size];
 
 				// If the source is a producer and destination is a transport belt, put a product into the belt.
-				if(sourceTile.type && sourceTile.type.output){
-//						if(sourceTile.type.output.call(sourceTile, dx, dy)){
-					if(sourceTile.output(dx, dy)){
+				if(sourceTile.structure && sourceTile.structure.output){
+//						if(sourceTile.structure.output.call(sourceTile, dx, dy)){
+					if(sourceTile.structure.output(dx, dy)){
 						this.cooldown = 10;
 						return;
 					}
 				}
 
 				// If the destinatoin is a destroyer, put the object into the destroyer and cosume it.
-				if(destTile.type && destTile.type.input){
+				if(destTile.structure && destTile.structure.input){
 					for(var j = 0; j < objects.length; j++){
 						var o = objects[j];
 						var otx = Math.floor(o.x / tilesize);
 						var oty = Math.floor(o.y / tilesize);
-						if(otx === sx && oty === sy && destTile.input(o)){
+						if(otx === sx && oty === sy && destTile.structure.input(o)){
 							table.removeChild(o.elem);
 							objects.splice(j, 1);
 							this.cooldown = 10;
@@ -186,13 +240,13 @@
 					}
 				}
 			}
-		};
+		});
 
 		// Ore Mine
 		function OreMine(){
 			this.cooldown = 0;
 		}
-		OreMine.prototype = {
+		inherit(OreMine, Structure, {
 			name: "Ore Mine",
 			symbol: 'Mi',
 
@@ -206,7 +260,7 @@
 					this.cooldown = 0;
 				else
 					this.cooldown--;
-				var elem = tileElems[board.indexOf(this)];
+				var elem = tileElems[board.indexOf(this.tile)];
 				elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - this.cooldown / 50) * 255).toFixed() + ')';
 			},
 			output: function(dx, dy){
@@ -219,20 +273,20 @@
 				else
 					return false;
 			}
-		};
+		});
 
 		// Furnace
 		function Furnace(){
 			this.cooldown = 0;
 			this.consumeCooldown = 0;
 		}
-		Furnace.prototype = {
+		inherit(Furnace, Structure, {
 			name: "Furnace",
 			symbol: 'F',
 
 			desc: function(tile){
 				return "Inputs: Ore<br>" +
-					"&nbsp;&nbsp;x " + (tile.inputMetals || 0) + "<br>" +
+					"&nbsp;&nbsp;x " + (this.inputMetals || 0) + "<br>" +
 					"Outputs: Metal plate<br>" +
 					"Time: 20";
 			},
@@ -246,7 +300,7 @@
 					this.consumeCooldown = 0;
 				else
 					this.consumeCooldown--;
-				var elem = tileElems[board.indexOf(this)];
+				var elem = tileElems[board.indexOf(this.tile)];
 				elem.style.backgroundColor = 'rgb(255, ' + ((1 - this.consumeCooldown / 20) * 255).toFixed() + ', ' + ((1 - this.cooldown / 70) * 255).toFixed() + ')';
 			},
 			input: function(o){
@@ -269,13 +323,13 @@
 				else
 					return false;
 			}
-		};
+		});
 
 		// Destroyer
 		function Destroyer(){
 			this.consumeCooldown = 0;
 		}
-		Destroyer.prototype = {
+		inherit(Destroyer, Structure, {
 			name: "Destroyer",
 			symbol: 'D',
 			frameProc: function(tile){
@@ -292,7 +346,7 @@
 				this.consumeCooldown = 20;
 				return true;
 			}
-		};
+		});
 
 		var toolDefs = [
 			TransportBelt,
@@ -353,17 +407,10 @@
 			tileElem.style.transform = '';
 			tileElem.style.borderStyle = 'solid';
 			// The only child of tile element is the tile text.
-			if(tile.type === null)
+			if(tile.structure === null)
 				tileElem.innerHTML = "";
 			else{
-				if(tile.type.draw)
-					tile.type.draw(tileElem);
-				else if(tile.type.symbol instanceof Array){
-					tileElem.innerHTML = tile.type.symbol[tile.rotation];
-				}
-				else{
-					tileElem.innerHTML = tile.type.symbol;
-				}
+				tile.structure.draw(tileElem);
 			}
 		}
 
@@ -419,15 +466,15 @@
 						var r = Math.floor(idx / size);
 
 						if(e.button !== 0){
-							board[c + r * size].type = null;
+							board[c + r * size].structure = null;
 						}
 						else if(0 <= currentTool && currentTool < toolDefs.length){
-							// Probably the tile and the structure built on it should be different
+							// The tile and the structure built on it should be different
 							// object, because it would force us to recreate and replace existing tile object
 							// everytime structure is built on it.
-							board[c + r * size] = new toolDefs[currentTool];
-							board[c + r * size].type = toolDefs[currentTool].prototype;
-							board[c + r * size].rotation = currentRotation;
+							board[c + r * size].structure = new toolDefs[currentTool];
+							board[c + r * size].structure.tile = board[c + r * size];
+							board[c + r * size].structure.rotation = currentRotation;
 						}
 						else{
 							// If mouse button is clicked without any tool selected, add object at the clicked position.
@@ -535,12 +582,12 @@
 				return;
 			}
 			var tile = board[selectedCoords[0] + selectedCoords[1] * size];
-			if(!tile || !tile.type){
+			if(!tile || !tile.structure){
 				infoElem.innerHTML = 'Empty tile';
 				return;
 			}
-			infoElem.innerHTML = 'Type: ' + tile.type.name + '<br>' +
-				(tile.type.desc ? tile.type.desc(tile) : "");
+			infoElem.innerHTML = 'Type: ' + tile.structure.name + '<br>' +
+				(tile.structure.desc ? tile.structure.desc(tile) : "");
 		}
 
 		function selectTile(sel){
@@ -578,8 +625,7 @@
 
 		function newblock(){
 			return {
-				type: null,
-				rotation: 0,
+				structure: null,
 			};
 		}
 
@@ -589,12 +635,12 @@
 		function movableTile(x, y){
 			var tx = Math.floor(x / tilesize);
 			var ty = Math.floor(y / tilesize);
-			if(tx < 0 || size < tx || ty < 0 || size < ty)
+			if(tx < 0 || size < tx || ty < 0 || size < ty || isNaN(tx) || isNaN(ty))
 				return false;
 			// Ojects should not be placed on an empty tile
-			if(!board[tx + ty * size].type)
+			if(!board[tx + ty * size].structure)
 				return false;
-			return board[tx + ty * size].type.movable && board[tx + ty * size].type.movable();
+			return board[tx + ty * size].structure.movable();
 		}
 
 		/// Check whether given coordinates hits some object
@@ -649,15 +695,15 @@
 				var tx = Math.floor(o.x / tilesize);
 				var ty = Math.floor(o.y / tilesize);
 				var tile = board[tx + ty * size];
-				if(tile.type && tile.type.objectResponse)
-					tile.type.objectResponse(tile, o);
+				if(tile.structure)
+					tile.structure.objectResponse(tile, o);
 			}
 
 			for(var ty = 0; ty < size; ty++){
 				for(var tx = 0; tx < size; tx++){
 					var tile = board[tx + ty * size];
-					if(tile.frameProc)
-						tile.frameProc(tile);
+					if(tile.structure)
+						tile.structure.frameProc(tile);
 				}
 			}
 
