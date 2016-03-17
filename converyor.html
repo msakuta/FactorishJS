@@ -614,13 +614,14 @@
 			if(hitCheck(obj.x, obj.y))
 				return false;
 			obj.elem = document.createElement('div');
-			if(type === 'O'){
+			if(type === 'O')
 				obj.elem.style.backgroundImage = 'url("img/ore.png")';
-				obj.elem.style.width = '16px';
-				obj.elem.style.height = '16px';
-			}
+			else if(type === 'M')
+				obj.elem.style.backgroundImage = 'url("img/metal.png")';
 			else
 				obj.elem.innerHTML = type;
+			obj.elem.style.width = '16px';
+			obj.elem.style.height = '16px';
 			obj.elem.style.position = 'absolute';
 			obj.elem.style.left = obj.x + 'px';
 			obj.elem.style.top = obj.y + 'px';
