@@ -85,6 +85,7 @@
 
 		// Constants
 		var tilesize = 32;
+		var objsize = tilesize / 2;
 
 		var toolBarElem;
 		var toolElems = [];
@@ -114,8 +115,8 @@
 					return;
 				o.x = newx;
 				o.y = newy;
-				o.elem.style.left = o.x + 'px';
-				o.elem.style.top = o.y + 'px';
+				o.elem.style.left = (o.x - objsize / 2) + 'px';
+				o.elem.style.top = (o.y - objsize / 2) + 'px';
 			},
 
 			frameProc: function(){
@@ -390,8 +391,8 @@
 			table.style.borderColor = 'red';
 			table.style.position = 'relative';
 			table.style.left = '50%';
-			table.style.width = (size * 32. + 8) + 'px';
-			table.style.height = (size * 32. + 8) + 'px';
+			table.style.width = (size * tilesize) + 'px';
+			table.style.height = (size * tilesize) + 'px';
 
 			messageElem = document.createElement('div');
 			container.appendChild(messageElem);
@@ -409,8 +410,8 @@
 					tileElem.style.width = '32px';
 					tileElem.style.height = '32px';
 					tileElem.style.position = 'absolute';
-					tileElem.style.top = (32.0 * iy + 4) + 'px';
-					tileElem.style.left = (32.0 * ix + 4) + 'px';
+					tileElem.style.top = (tilesize * iy) + 'px';
+					tileElem.style.left = (tilesize * ix) + 'px';
 					tileElem.style.border = '1px black solid';
 					tileElem.onmousedown = function(e){
 						var idx = tileElems.indexOf(this);
@@ -556,8 +557,8 @@
 					table.appendChild(cursorElem);
 				}
 				cursorElem.style.position = 'absolute';
-				cursorElem.style.top = (32.0 * iy + 4) + 'px';
-				cursorElem.style.left = (32.0 * ix + 4) + 'px';
+				cursorElem.style.top = (tilesize * iy) + 'px';
+				cursorElem.style.left = (tilesize * ix) + 'px';
 				cursorElem.style.width = '30px';
 				cursorElem.style.height = '30px';
 				updateInfo();
@@ -602,7 +603,7 @@
 				var jo = objects[j];
 				if(ignore === jo)
 					continue;
-				if(Math.abs(x - jo.x) < 16 && Math.abs(y - jo.y) < 16)
+				if(Math.abs(x - jo.x) < objsize && Math.abs(y - jo.y) < objsize)
 					return true;
 			}
 			return false;
@@ -620,11 +621,13 @@
 				obj.elem.style.backgroundImage = 'url("img/metal.png")';
 			else
 				obj.elem.innerHTML = type;
-			obj.elem.style.width = '16px';
-			obj.elem.style.height = '16px';
+			// Debug graphic for bounding box
+//			obj.elem.style.border = '1px solid';
+			obj.elem.style.width = objsize + 'px';
+			obj.elem.style.height = objsize + 'px';
 			obj.elem.style.position = 'absolute';
-			obj.elem.style.left = obj.x + 'px';
-			obj.elem.style.top = obj.y + 'px';
+			obj.elem.style.left = (obj.x - objsize / 2) + 'px';
+			obj.elem.style.top = (obj.y - objsize / 2) + 'px';
 			// Disable mouse events since we don't want an object to catch mouse event when
 			// we're adding a structure to a tile.
 			obj.elem.style.pointerEvents = 'none';
