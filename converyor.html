@@ -296,7 +296,7 @@ function inherit(subclass,base,methods){
 		}
 		inherit(OreMine, Structure, {
 			name: "Ore Mine",
-			symbol: 'Mi',
+			symbol: ["&lt;<br>Mi", "^<br>Mi", "&gt;<br>Mi", "V<br>Mi"],
 
 			desc: function(tile){
 				return "Outputs: Ore<br>" +
@@ -309,6 +309,19 @@ function inherit(subclass,base,methods){
 					this.cooldown = 0;
 				else
 					this.cooldown--;
+
+				var idx = board.indexOf(this.tile);
+				var tx = idx % size;
+				var ty = Math.floor(idx / size);
+				var vx = [-1, 0, 1, 0][this.rotation];
+				var vy = [0, -1, 0, 1][this.rotation];
+				var dx = tx + vx;
+				var dy = ty + vy;
+				var destTile = board[dx + dy * size];
+
+				// Ore mine can output minerals without inserters
+				this.output(dx, dy);
+
 				var elem = tileElems[board.indexOf(this.tile)];
 				elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - this.cooldown / 50) * 255).toFixed() + ')';
 			},
@@ -318,7 +331,7 @@ function inherit(subclass,base,methods){
 				if(this.tile.ironOre <= 0)
 					return false; // Exhausted
 				if(newObject(dx, dy, 'O')){
-					this.cooldown = 50;
+					this.cooldown = 80;
 					this.tile.ironOre--;
 					return true;
 				}
