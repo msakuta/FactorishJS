@@ -252,7 +252,8 @@ function inherit(subclass,base,methods){
 
 			desc: function(tile){
 				return "Outputs: Ore<br>" +
-					"Time: 50";
+					"Time: 50<br>" + 
+					"Expected output: " + tile.ironOre;
 			},
 
 			frameProc: function(){
@@ -266,8 +267,11 @@ function inherit(subclass,base,methods){
 			output: function(dx, dy){
 				if(0 < this.cooldown)
 					return false;
+				if(this.tile.ironOre <= 0)
+					return false; // Exhausted
 				if(newObject(dx, dy, 'O')){
 					this.cooldown = 50;
+					this.tile.ironOre--;
 					return true;
 				}
 				else
@@ -406,6 +410,8 @@ function inherit(subclass,base,methods){
 			tileElem.style.backgroundImage = '';
 			tileElem.style.transform = '';
 			tileElem.style.borderStyle = 'solid';
+			tileElem.style.backgroundColor = 'rgb(' + (255 - tile.ironOre * 255 / 100).toFixed() + ',' +
+				(255 - tile.ironOre * 255 / 100 / 2).toFixed() + ',255)';
 			// The only child of tile element is the tile text.
 			if(tile.structure === null)
 				tileElem.innerHTML = "";
@@ -451,6 +457,7 @@ function inherit(subclass,base,methods){
 			container.appendChild(table);
 			for(var iy = 0; iy < size; iy++){
 				for(var ix = 0; ix < size; ix++){
+					var tile = board[ix + iy * size];
 					var tileElem = document.createElement("div");
 					tileElems[ix + iy * size] = tileElem;
 					tileElem.innerHTML = "";
@@ -496,6 +503,8 @@ function inherit(subclass,base,methods){
 
 					// Disable text selection
 					tileElem.setAttribute("class", "noselect");
+
+					updateTile(tile);
 				}
 			}
 			// Set the margin after contents are initialized
@@ -583,7 +592,8 @@ function inherit(subclass,base,methods){
 			}
 			var tile = board[selectedCoords[0] + selectedCoords[1] * size];
 			if(!tile || !tile.structure){
-				infoElem.innerHTML = 'Empty tile';
+				infoElem.innerHTML = 'Empty tile<br>' +
+					'Iron Ore: ' + tile.ironOre;
 				return;
 			}
 			infoElem.innerHTML = 'Type: ' + tile.structure.name + '<br>' +
@@ -626,6 +636,7 @@ function inherit(subclass,base,methods){
 		function newblock(){
 			return {
 				structure: null,
+				ironOre: Math.max(0, (Math.random() * 200 - 100).toFixed()),
 			};
 		}
 
