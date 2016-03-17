@@ -95,6 +95,15 @@
 			name: "Transport Belt",
 			symbol: ["&lt;", "^", "&gt;", "V"],
 
+			draw: function(tileElem){
+				var idx = tileElems.indexOf(tileElem);
+				var tile = board[idx];
+				tileElem.style.backgroundImage = 'url("img/transport.png")';
+				tileElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
+				tileElem.style.transform = 'rotate(' + (tile.rotation * 90 + 180) + 'deg)';
+				tileElem.style.borderStyle = 'none';
+			},
+
 			// Function to respond when an object is on it.
 			objectResponse: function(tile, o){
 				var vx = [-1, 0, 1, 0][tile.rotation];
@@ -107,6 +116,12 @@
 				o.y = newy;
 				o.elem.style.left = o.x + 'px';
 				o.elem.style.top = o.y + 'px';
+			},
+
+			frameProc: function(){
+				var idx = board.indexOf(this);
+				var tileElem = tileElems[idx];
+				tileElem.style.backgroundPosition = simstep % 32 + 'px 0';
 			},
 
 			movable: function(tile){
@@ -333,14 +348,21 @@
 			var c = idx % size;
 			var r = Math.floor(idx / size);
 			var tileElem = tileElems[c + r * size];
+			tileElem.style.backgroundImage = '';
+			tileElem.style.transform = '';
+			tileElem.style.borderStyle = 'solid';
 			// The only child of tile element is the tile text.
 			if(tile.type === null)
 				tileElem.innerHTML = "";
-			else if(tile.type.symbol instanceof Array){
-				tileElem.innerHTML = tile.type.symbol[tile.rotation];
-			}
 			else{
-				tileElem.innerHTML = tile.type.symbol;
+				if(tile.type.draw)
+					tile.type.draw(tileElem);
+				else if(tile.type.symbol instanceof Array){
+					tileElem.innerHTML = tile.type.symbol[tile.rotation];
+				}
+				else{
+					tileElem.innerHTML = tile.type.symbol;
+				}
 			}
 		}
 
@@ -384,8 +406,8 @@
 					var tileElem = document.createElement("div");
 					tileElems[ix + iy * size] = tileElem;
 					tileElem.innerHTML = "";
-					tileElem.style.width = '31px';
-					tileElem.style.height = '31px';
+					tileElem.style.width = '32px';
+					tileElem.style.height = '32px';
 					tileElem.style.position = 'absolute';
 					tileElem.style.top = (32.0 * iy + 4) + 'px';
 					tileElem.style.left = (32.0 * ix + 4) + 'px';
