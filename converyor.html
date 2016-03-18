@@ -316,6 +316,19 @@ function inherit(subclass,base,methods){
 			name: "Ore Mine",
 			symbol: ["&lt;<br>Mi", "^<br>Mi", "&gt;<br>Mi", "V<br>Mi"],
 
+			draw: function(tileElem){
+				var idx = tileElems.indexOf(tileElem);
+				tileElem.style.backgroundImage = 'url("img/mine.png")';
+				tileElem.style.borderStyle = 'none';
+				// Clear the children first
+				while(tileElem.firstChild)
+					tileElem.removeChild(tileElem.firstChild);
+				var directionElem = document.createElement('img');
+				directionElem.src = 'img/direction.png';
+				directionElem.style.transform = 'rotate(' + (this.rotation * 90) + 'deg)';
+				tileElem.appendChild(directionElem);
+			},
+
 			desc: function(tile){
 				return "Outputs: Ore<br>" +
 					"Time: 50<br>" +
@@ -767,6 +780,8 @@ function inherit(subclass,base,methods){
 					img.src = 'img/transport.png';
 				else if(i === 'Inserter')
 					img.src = 'img/inserter-base.png';
+				else if(i === 'Ore Mine')
+					img.src = "img/mine.png";
 				img.style.width = objsize + 'px';
 				img.style.height = objsize + 'px';
 				div.appendChild(img);
