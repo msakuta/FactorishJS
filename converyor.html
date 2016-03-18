@@ -90,6 +90,7 @@
 
 		var toolBarElem;
 		var toolElems = [];
+		var toolCursorElem;
 
 		// Placeholder object for player
 		var player = {inventory: {}, selectedInventory: null};
@@ -196,6 +197,19 @@ function inherit(subclass,base,methods){
 		inherit(Inserter, Structure, {
 			name: "Inserter",
 			symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
+
+			draw: function(tileElem){
+				var idx = tileElems.indexOf(tileElem);
+				tileElem.style.backgroundImage = 'url("img/inserter-base.png")';
+				tileElem.style.borderStyle = 'none';
+				// Clear the children first
+				while(tileElem.firstChild)
+					tileElem.removeChild(tileElem.firstChild);
+				var directionElem = document.createElement('img');
+				directionElem.src = 'img/direction.png';
+				directionElem.style.transform = 'rotate(' + (this.rotation * 90) + 'deg)';
+				tileElem.appendChild(directionElem);
+			},
 
 			frameProc: function(){
 				if(this.cooldown < 1)
@@ -304,7 +318,7 @@ function inherit(subclass,base,methods){
 
 			desc: function(tile){
 				return "Outputs: Ore<br>" +
-					"Time: 50<br>" + 
+					"Time: 50<br>" +
 					"Expected output: " + tile.ironOre;
 			},
 
@@ -444,6 +458,7 @@ function inherit(subclass,base,methods){
 			if(event.keyCode === 82){
 				if(0 <= currentTool){
 					currentRotation = (currentRotation + 1) % 4;
+					toolDefs[currentTool].prototype.rotation = currentRotation;
 					updateTool(currentTool);
 				}
 				else if(selectedCoords !== null){
@@ -499,7 +514,7 @@ function inherit(subclass,base,methods){
 
 		function updateTool(tool){
 			if(0 <= tool && tool < toolElems.length)
-				toolElems[tool].innerHTML = toolDefs[tool].prototype.symbol instanceof Array ? toolDefs[tool].prototype.symbol[currentRotation] : toolDefs[tool].prototype.symbol;
+				toolDefs[tool].prototype.draw.call(toolDefs[tool].prototype, toolElems[tool]);
 		}
 
 		function harvest(tile){
@@ -534,6 +549,8 @@ function inherit(subclass,base,methods){
 			outerContainer.appendChild(container);
 			if(cursorElem)
 				cursorElem = null;
+			if(toolCursorElem)
+				toolCursorElem = null;
 
 			table = document.createElement("div");
 			table.style.borderStyle = 'solid';
@@ -625,6 +642,22 @@ function inherit(subclass,base,methods){
 				if(0 <= idx && idx < toolElems.length)
 					toolElems[idx].style.backgroundColor = '#00ffff';
 				currentTool = idx;
+				if(0 <= currentTool){
+					if(!toolCursorElem){
+						toolCursorElem = document.createElement('div');
+						toolCursorElem.style.border = '2px blue solid';
+						toolCursorElem.style.pointerEvents = 'none';
+						toolBarElem.appendChild(toolCursorElem);
+					}
+					toolCursorElem.style.position = 'absolute';
+					toolCursorElem.style.top = '4px';
+					toolCursorElem.style.left = (tilesize * currentTool + 4) + 'px';
+					toolCursorElem.style.width = '30px';
+					toolCursorElem.style.height = '30px';
+					toolCursorElem.style.display = 'block';
+				}
+				else if(toolCursorElem)
+					toolCursorElem.style.display = 'none';
 			}
 
 			// Reset the state before initializing toolbar elements
@@ -659,7 +692,7 @@ function inherit(subclass,base,methods){
 				toolBarElem.appendChild(toolElem);
 				// Disable text selection
 				toolElem.setAttribute("class", "noselect");
-				toolElem.innerHTML = toolDefs[i].prototype.symbol instanceof Array ? toolDefs[i].prototype.symbol[0] : toolDefs[i].prototype.symbol;
+				toolDefs[i].prototype.draw(toolElem);
 			}
 			// Set the margin after contents are initialized
 			toolBarElem.style.marginLeft = (-toolBarElem.getBoundingClientRect().width / 2) + 'px';
@@ -730,6 +763,10 @@ function inherit(subclass,base,methods){
 				}
 				else if(i === 'M')
 					img.src = 'img/metal.png';
+				else if(i === 'Transport Belt')
+					img.src = 'img/transport.png';
+				else if(i === 'Inserter')
+					img.src = 'img/inserter-base.png';
 				img.style.width = objsize + 'px';
 				img.style.height = objsize + 'px';
 				div.appendChild(img);
