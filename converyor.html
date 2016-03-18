@@ -299,6 +299,13 @@ function inherit(subclass,base,methods){
 		inherit(Chest, Container, {
 			name: "Chest",
 			symbol: 'C',
+
+			draw: function(tileElem){
+				var idx = tileElems.indexOf(tileElem);
+				tileElem.style.backgroundImage = 'url("img/chest.png")';
+				tileElem.style.borderStyle = 'none';
+			},
+
 			desc: function(tile){
 				var ret = "Items:<br>";
 				for(var i in this.inventory)
@@ -780,6 +787,8 @@ function inherit(subclass,base,methods){
 					img.src = 'img/transport.png';
 				else if(i === 'Inserter')
 					img.src = 'img/inserter-base.png';
+				else if(i === 'Chest')
+					img.src = 'img/chest.png';
 				else if(i === 'Ore Mine')
 					img.src = "img/mine.png";
 				img.style.width = objsize + 'px';
