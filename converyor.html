@@ -387,6 +387,12 @@ function inherit(subclass,base,methods){
 			name: "Furnace",
 			symbol: 'F',
 
+			draw: function(tileElem){
+				var idx = tileElems.indexOf(tileElem);
+				tileElem.style.backgroundImage = 'url("img/furnace.png")';
+				tileElem.style.borderStyle = 'none';
+			},
+
 			desc: function(tile){
 				return "Inputs: Ore<br>" +
 					"&nbsp;&nbsp;x " + (this.inputMetals || 0) + "<br>" +
@@ -791,6 +797,8 @@ function inherit(subclass,base,methods){
 					img.src = 'img/chest.png';
 				else if(i === 'Ore Mine')
 					img.src = "img/mine.png";
+				else if(i === 'Furnace')
+					img.src = "img/furnace.png";
 				img.style.width = objsize + 'px';
 				img.style.height = objsize + 'px';
 				div.appendChild(img);
