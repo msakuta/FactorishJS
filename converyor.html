@@ -54,13 +54,13 @@
 		<h1>Conveyor</h1>
 		Size:
 		<select id="sizeSelect">
-			<option>6</option>
-			<option selected>7</option>
-			<option>8</option>
-			<option>9</option>
-			<option>10</option>
-			<option>11</option>
-			<option>12</option>
+			<option>16</option>
+			<option selected>24</option>
+			<option>32</option>
+			<option>48</option>
+			<option>64</option>
+			<option>128</option>
+			<option>256</option>
 		</select>
 		<input type="button" onclick="generateBoard()" value="Start">
 		<hr>
@@ -74,8 +74,11 @@
 		var container;
 		var table;
 		var size;
+		var viewPortWidth;
+		var viewPortHeight;
 		var board;
 		var tileElems;
+		var scrollPos = [0, 0];
 		var selectedTile = null;
 		var selectedCoords = null;
 		var cursorElem;
@@ -182,8 +185,7 @@ function inherit(subclass,base,methods){
 					return;
 				o.x = newx;
 				o.y = newy;
-				o.elem.style.left = (o.x - objsize / 2) + 'px';
-				o.elem.style.top = (o.y - objsize / 2) + 'px';
+				positionObject(o);
 			},
 
 			frameProc: function(){
@@ -223,8 +225,6 @@ function inherit(subclass,base,methods){
 					this.cooldown = 0;
 				else
 					this.cooldown--;
-				var elem = tileElems[board.indexOf(this.tile)];
-				elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - this.cooldown / 10) * 255).toFixed() + ')';
 
 				if(0 < this.cooldown)
 					return;
@@ -370,9 +370,6 @@ function inherit(subclass,base,methods){
 
 				// Ore mine can output minerals without inserters
 				this.output(dx, dy);
-
-				var elem = tileElems[board.indexOf(this.tile)];
-				elem.style.backgroundColor = 'rgb(255, 255, ' + ((1 - this.cooldown / 50) * 255).toFixed() + ')';
 			},
 			output: function(dx, dy){
 				if(0 < this.cooldown)
@@ -423,8 +420,6 @@ function inherit(subclass,base,methods){
 					this.consumeCooldown = 0;
 				else
 					this.consumeCooldown--;
-				var elem = tileElems[board.indexOf(this.tile)];
-				elem.style.backgroundColor = 'rgb(255, ' + ((1 - this.consumeCooldown / 20) * 255).toFixed() + ', ' + ((1 - this.cooldown / 70) * 255).toFixed() + ')';
 			},
 			input: function(o){
 				if(o.type !== 'O')
@@ -460,8 +455,6 @@ function inherit(subclass,base,methods){
 					tile.consumeCooldown = 0;
 				else
 					tile.consumeCooldown--;
-				var elem = tileElems[board.indexOf(tile)];
-				elem.style.backgroundColor = 'rgb(255, ' + ((1 - tile.consumeCooldown / 20) * 255).toFixed() + ', 255)';
 			},
 			input: function(o){
 				if(o.type !== 'M')
@@ -511,6 +504,30 @@ function inherit(subclass,base,methods){
 			if(event.keyCode === 82){
 				rotate();
 			}
+			else if(event.keyCode === 37){ // Left arrow
+				if(0 < scrollPos[0]){
+					scrollPos[0]--;
+					updateAllTiles();
+				}
+			}
+			else if(event.keyCode === 38){ // Up arrow
+				if(0 < scrollPos[1]){
+					scrollPos[1]--;
+					updateAllTiles();
+				}
+			}
+			else if(event.keyCode === 39){ // Right arrow
+				if(scrollPos[0] + 1 < size - viewPortWidth){
+					scrollPos[0]++;
+					updateAllTiles();
+				}
+			}
+			else if(event.keyCode === 40){ // Down arrow
+				if(scrollPos[1] + 1 < size - viewPortHeight){
+					scrollPos[1]++;
+					updateAllTiles();
+				}
+			}
 		}
 
 		window.onload = function(){
@@ -537,12 +554,18 @@ function inherit(subclass,base,methods){
 
 		window.addEventListener('resize', onSize);
 
+		function getTileElem(x, y){
+			return tileElems[x + y * viewPortWidth];
+		}
+
 		/// Update single tile graphics to match internal data
 		function updateTile(tile){
 			var idx = board.indexOf(tile);
-			var c = idx % size;
-			var r = Math.floor(idx / size);
-			var tileElem = tileElems[c + r * size];
+			var c = idx % size - scrollPos[0];
+			var r = Math.floor(idx / size) - scrollPos[1];
+			var tileElem = getTileElem(c, r);
+			if(!tileElem)
+				return;
 			tileElem.style.backgroundImage = 'url("img/dirt.png")';
 			tileElem.style.transform = '';
 			tileElem.style.backgroundColor = 'rgb(' + (255 - tile.ironOre * 255 / 100).toFixed() + ',' +
@@ -566,6 +589,15 @@ function inherit(subclass,base,methods){
 			else{
 				tile.structure.draw(tileElem);
 			}
+		}
+
+		function updateAllTiles(){
+			for(var iy = 0; iy < viewPortHeight; iy++){
+				for(var ix = 0; ix < viewPortWidth; ix++)
+					updateTile(board[(ix + scrollPos[0]) + (iy + scrollPos[1]) * size]);
+			}
+			for(var i = 0; i < objects.length; i++)
+				positionObject(objects[i]);
 		}
 
 		function updateTool(tool){
@@ -598,7 +630,7 @@ function inherit(subclass,base,methods){
 		}
 
 		function createElements(){
-			tileElems = new Array(size * size);
+			tileElems = new Array(viewPortWidth * viewPortHeight);
 
 			// The containers are nested so that the inner container can be easily
 			// discarded to recreate the whole game.
@@ -618,8 +650,8 @@ function inherit(subclass,base,methods){
 			table.style.borderColor = 'red';
 			table.style.position = 'relative';
 			table.style.left = '50%';
-			table.style.width = (size * tilesize) + 'px';
-			table.style.height = (size * tilesize) + 'px';
+			table.style.width = (viewPortWidth * tilesize) + 'px';
+			table.style.height = (viewPortHeight * tilesize) + 'px';
 
 			messageElem = document.createElement('div');
 			container.appendChild(messageElem);
@@ -629,11 +661,11 @@ function inherit(subclass,base,methods){
 			messageElem.style.color = 'red';
 
 			container.appendChild(table);
-			for(var iy = 0; iy < size; iy++){
-				for(var ix = 0; ix < size; ix++){
+			for(var iy = 0; iy < viewPortHeight; iy++){
+				for(var ix = 0; ix < viewPortWidth; ix++){
 					var tile = board[ix + iy * size];
 					var tileElem = document.createElement("div");
-					tileElems[ix + iy * size] = tileElem;
+					tileElems[ix + iy * viewPortWidth] = tileElem;
 					tileElem.innerHTML = "";
 					tileElem.style.width = '32px';
 					tileElem.style.height = '32px';
@@ -642,8 +674,8 @@ function inherit(subclass,base,methods){
 					tileElem.style.left = (tilesize * ix) + 'px';
 					tileElem.onmousedown = function(e){
 						var idx = tileElems.indexOf(this);
-						var c = idx % size;
-						var r = Math.floor(idx / size);
+						var c = idx % viewPortWidth + scrollPos[0];
+						var r = Math.floor(idx / viewPortWidth) + scrollPos[1];
 
 						if(e.button !== 0){
 							harvest(board[c + r * size]);
@@ -870,8 +902,10 @@ function inherit(subclass,base,methods){
 		function selectTile(sel){
 			selectedTile = sel;
 			var idx = tileElems.indexOf(sel);
-			var ix = idx % size;
-			var iy = Math.floor(idx / size);
+			var vx = idx % viewPortWidth;
+			var vy = Math.floor(idx / viewPortWidth);
+			var ix = vx + scrollPos[0];
+			var iy = vy + scrollPos[1];
 			selectedCoords = [ix, iy];
 			if(ix < size && iy < size){
 				if(!cursorElem){
@@ -881,8 +915,8 @@ function inherit(subclass,base,methods){
 					table.appendChild(cursorElem);
 				}
 				cursorElem.style.position = 'absolute';
-				cursorElem.style.top = (tilesize * iy) + 'px';
-				cursorElem.style.left = (tilesize * ix) + 'px';
+				cursorElem.style.top = (tilesize * vy) + 'px';
+				cursorElem.style.left = (tilesize * vx) + 'px';
 				cursorElem.style.width = '30px';
 				cursorElem.style.height = '30px';
 				updateInfo();
@@ -892,6 +926,8 @@ function inherit(subclass,base,methods){
 		function generateBoard(){
 			var sizeStr = document.getElementById("sizeSelect").value;
 			size = parseInt(sizeStr);
+			viewPortWidth = 16;
+			viewPortHeight = 12;
 			board = new Array(size * size);
 
 			for(var i = 0; i < size * size; i++)
@@ -950,15 +986,26 @@ function inherit(subclass,base,methods){
 			obj.elem.style.width = objsize + 'px';
 			obj.elem.style.height = objsize + 'px';
 			obj.elem.style.position = 'absolute';
-			obj.elem.style.left = (obj.x - objsize / 2) + 'px';
-			obj.elem.style.top = (obj.y - objsize / 2) + 'px';
 			// Disable mouse events since we don't want an object to catch mouse event when
 			// we're adding a structure to a tile.
 			obj.elem.style.pointerEvents = 'none';
 			obj.elem.setAttribute('class', 'noselect');
+			positionObject(obj);
 			table.appendChild(obj.elem);
 			objects.push(obj);
 			return true;
+		}
+
+		function positionObject(obj){
+			var vx = obj.x - scrollPos[0] * tilesize;
+			var vy = obj.y - scrollPos[1] * tilesize;
+			if(vx < 0 || viewPortWidth * tilesize < vx || vy < 0 || viewPortHeight * tilesize < vy){
+				obj.elem.style.display = 'none';
+				return;
+			}
+			obj.elem.style.display = 'block';
+			obj.elem.style.left = (vx - objsize / 2) + 'px';
+			obj.elem.style.top = (vy - objsize / 2) + 'px';
 		}
 
 		var simstep = 0;
