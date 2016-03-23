@@ -486,19 +486,23 @@ function inherit(subclass,base,methods){
 			}
 		}
 
+		function rotate(){
+			if(0 <= currentTool){
+				currentRotation = (currentRotation + 1) % 4;
+				toolDefs[currentTool].prototype.rotation = currentRotation;
+				updateTool(currentTool);
+			}
+			else if(selectedCoords !== null){
+				var tile = board[selectedCoords[0] + selectedCoords[1] * size];
+				tile.rotation = (tile.rotation + 1) % 4;
+				updateTile(tile);
+			}
+		}
+
 		function onKeyDown(event){
 			// "R" key rotates the tile
 			if(event.keyCode === 82){
-				if(0 <= currentTool){
-					currentRotation = (currentRotation + 1) % 4;
-					toolDefs[currentTool].prototype.rotation = currentRotation;
-					updateTool(currentTool);
-				}
-				else if(selectedCoords !== null){
-					var tile = board[selectedCoords[0] + selectedCoords[1] * size];
-					tile.rotation = (tile.rotation + 1) % 4;
-					updateTile(tile);
-				}
+				rotate();
 			}
 		}
 
@@ -721,8 +725,8 @@ function inherit(subclass,base,methods){
 			toolBarElem.style.position = 'relative';
 			toolBarElem.margin = '3px';
 			toolBarElem.style.left = '50%';
-			toolBarElem.style.width = (toolDefs.length * 32. + 8) + 'px';
-			toolBarElem.style.height = (32. + 8) + 'px';
+			toolBarElem.style.width = ((toolDefs.length + 1) * tilesize + 8) + 'px';
+			toolBarElem.style.height = (tilesize + 8) + 'px';
 			container.appendChild(toolBarElem);
 			for(var i = 0; i < toolDefs.length; i++){
 				var toolElem = document.createElement("div");
@@ -742,6 +746,19 @@ function inherit(subclass,base,methods){
 				toolElem.setAttribute("class", "noselect");
 				toolDefs[i].prototype.draw(toolElem);
 			}
+			var rotateButton = document.createElement('div');
+			rotateButton.style.width = '31px';
+			rotateButton.style.height = '31px';
+			rotateButton.style.position = 'relative';
+			rotateButton.style.top = '4px';
+			rotateButton.style.left = (32.0 * i + 4) + 'px';
+			rotateButton.style.border = '1px blue solid';
+			rotateButton.style.backgroundImage = 'url("img/rotate.png")';
+			rotateButton.onmousedown = function(e){
+				rotate();
+			}
+			toolBarElem.appendChild(rotateButton);
+
 			// Set the margin after contents are initialized
 			toolBarElem.style.marginLeft = (-toolBarElem.getBoundingClientRect().width / 2) + 'px';
 
