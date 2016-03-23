@@ -159,10 +159,18 @@ function inherit(subclass,base,methods){
 			symbol: ["&lt;", "^", "&gt;", "V"],
 
 			draw: function(tileElem){
-				tileElem.style.backgroundImage = 'url("img/transport.png")';
-				tileElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
-				tileElem.style.transform = 'rotate(' + (this.rotation * 90 + 180) + 'deg)';
-				tileElem.style.borderStyle = 'none';
+				var imgElem = document.createElement('div');
+				imgElem.style.position = 'absolute';
+				imgElem.style.left = '0px';
+				imgElem.style.top = '0px';
+				imgElem.style.width = tilesize + 'px';
+				imgElem.style.height = tilesize + 'px';
+				imgElem.style.backgroundImage = 'url("img/transport.png")';
+				imgElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
+				imgElem.style.transform = 'rotate(' + (this.rotation * 90 + 180) + 'deg)';
+				imgElem.style.borderStyle = 'none';
+				tileElem.appendChild(imgElem);
+				this.imgElem = imgElem;
 			},
 
 			objectResponse: function(tile, o){
@@ -179,9 +187,8 @@ function inherit(subclass,base,methods){
 			},
 
 			frameProc: function(){
-				var idx = board.indexOf(this.tile);
-				var tileElem = tileElems[idx];
-				tileElem.style.backgroundPosition = simstep % 32 + 'px 0';
+				var imgElem = this.imgElem;
+				imgElem.style.backgroundPosition = simstep % 32 + 'px 0';
 			},
 
 			movable: function(tile){
