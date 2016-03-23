@@ -159,7 +159,6 @@ function inherit(subclass,base,methods){
 			symbol: ["&lt;", "^", "&gt;", "V"],
 
 			draw: function(tileElem){
-				var idx = tileElems.indexOf(tileElem);
 				tileElem.style.backgroundImage = 'url("img/transport.png")';
 				tileElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
 				tileElem.style.transform = 'rotate(' + (this.rotation * 90 + 180) + 'deg)';
@@ -199,15 +198,16 @@ function inherit(subclass,base,methods){
 			symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
 
 			draw: function(tileElem){
-				var idx = tileElems.indexOf(tileElem);
-				tileElem.style.backgroundImage = 'url("img/inserter-base.png")';
-				tileElem.style.borderStyle = 'none';
-				// Clear the children first
-				while(tileElem.firstChild)
-					tileElem.removeChild(tileElem.firstChild);
+				var baseElem = document.createElement('img');
+				baseElem.src = 'img/inserter-base.png';
+				baseElem.style.left = '0px';
+				baseElem.style.top = '0px';
+				baseElem.style.position = 'absolute';
+				tileElem.appendChild(baseElem);
 				var directionElem = document.createElement('img');
 				directionElem.src = 'img/direction.png';
 				directionElem.style.transform = 'rotate(' + (this.rotation * 90) + 'deg)';
+				directionElem.style.position = 'relative';
 				tileElem.appendChild(directionElem);
 			},
 
@@ -301,9 +301,12 @@ function inherit(subclass,base,methods){
 			symbol: 'C',
 
 			draw: function(tileElem){
-				var idx = tileElems.indexOf(tileElem);
-				tileElem.style.backgroundImage = 'url("img/chest.png")';
-				tileElem.style.borderStyle = 'none';
+				var imgElem = document.createElement('img');
+				imgElem.src = 'img/chest.png';
+				imgElem.style.left = '0px';
+				imgElem.style.top = '0px';
+				imgElem.style.position = 'absolute';
+				tileElem.appendChild(imgElem);
 			},
 
 			desc: function(tile){
@@ -324,15 +327,16 @@ function inherit(subclass,base,methods){
 			symbol: ["&lt;<br>Mi", "^<br>Mi", "&gt;<br>Mi", "V<br>Mi"],
 
 			draw: function(tileElem){
-				var idx = tileElems.indexOf(tileElem);
-				tileElem.style.backgroundImage = 'url("img/mine.png")';
-				tileElem.style.borderStyle = 'none';
-				// Clear the children first
-				while(tileElem.firstChild)
-					tileElem.removeChild(tileElem.firstChild);
+				var imgElem = document.createElement('img');
+				imgElem.src = 'img/mine.png';
+				imgElem.style.left = '0px';
+				imgElem.style.top = '0px';
+				imgElem.style.position = 'absolute';
+				tileElem.appendChild(imgElem);
 				var directionElem = document.createElement('img');
 				directionElem.src = 'img/direction.png';
 				directionElem.style.transform = 'rotate(' + (this.rotation * 90) + 'deg)';
+				directionElem.style.position = 'relative';
 				tileElem.appendChild(directionElem);
 			},
 
@@ -388,9 +392,12 @@ function inherit(subclass,base,methods){
 			symbol: 'F',
 
 			draw: function(tileElem){
-				var idx = tileElems.indexOf(tileElem);
-				tileElem.style.backgroundImage = 'url("img/furnace.png")';
-				tileElem.style.borderStyle = 'none';
+				var imgElem = document.createElement('img');
+				imgElem.src = 'img/furnace.png';
+				imgElem.style.left = '0px';
+				imgElem.style.top = '0px';
+				imgElem.style.position = 'absolute';
+				tileElem.appendChild(imgElem);
 			},
 
 			desc: function(tile){
@@ -525,22 +532,38 @@ function inherit(subclass,base,methods){
 			var c = idx % size;
 			var r = Math.floor(idx / size);
 			var tileElem = tileElems[c + r * size];
-			tileElem.style.backgroundImage = '';
+			tileElem.style.backgroundImage = 'url("img/dirt.png")';
 			tileElem.style.transform = '';
-			tileElem.style.borderStyle = 'solid';
 			tileElem.style.backgroundColor = 'rgb(' + (255 - tile.ironOre * 255 / 100).toFixed() + ',' +
 				(255 - tile.ironOre * 255 / 100 / 2).toFixed() + ',255)';
+			// Remove the children first, because old nodes may be present
+			while(tileElem.firstChild)
+				tileElem.removeChild(tileElem.firstChild);
+			if(tile.ironOre){
+				var oreElem = document.createElement('div');
+				oreElem.style.backgroundImage = 'url("img/iron.png")';
+				oreElem.style.backgroundPosition = '-' + Math.floor(tile.ironOre / 25) * 32 + 'px 0';
+				oreElem.style.position = 'absolute';
+				oreElem.style.width = tilesize + 'px';
+				oreElem.style.height = tilesize + 'px';
+				tileElem.appendChild(oreElem);
+			}
+
 			// The only child of tile element is the tile text.
 			if(tile.structure === null)
-				tileElem.innerHTML = "";
+				/*tileElem.innerHTML = ""*/;
 			else{
 				tile.structure.draw(tileElem);
 			}
 		}
 
 		function updateTool(tool){
-			if(0 <= tool && tool < toolElems.length)
+			if(0 <= tool && tool < toolElems.length){
+				// Remove the children first, because old nodes may be present
+				while(toolElems[tool].firstChild)
+					toolElems[tool].removeChild(toolElems[tool].firstChild);
 				toolDefs[tool].prototype.draw.call(toolDefs[tool].prototype, toolElems[tool]);
+			}
 		}
 
 		function harvest(tile){
@@ -606,7 +629,6 @@ function inherit(subclass,base,methods){
 					tileElem.style.position = 'absolute';
 					tileElem.style.top = (tilesize * iy) + 'px';
 					tileElem.style.left = (tilesize * ix) + 'px';
-					tileElem.style.border = '1px black solid';
 					tileElem.onmousedown = function(e){
 						var idx = tileElems.indexOf(this);
 						var c = idx % size;
