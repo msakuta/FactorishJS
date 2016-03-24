@@ -609,6 +609,10 @@ function inherit(subclass,base,methods){
 
 		function harvest(tile){
 			if(tile.structure){
+				if(tile.structure.miniMapSymbol){
+					miniMapElem.removeChild(tile.structure.miniMapSymbol);
+					tile.structure.miniMapSymbol = null;
+				}
 				if(tile.structure.inventory){
 					for(var i in tile.structure.inventory){
 						var v = tile.structure.inventory[i];
@@ -689,6 +693,14 @@ function inherit(subclass,base,methods){
 							board[c + r * size].structure = new tool;
 							board[c + r * size].structure.tile = board[c + r * size];
 							board[c + r * size].structure.rotation = currentRotation;
+							var symbol = board[c + r * size].structure.miniMapSymbol = document.createElement('div');
+							symbol.style.backgroundColor = '#0000ff';
+							symbol.style.width = Math.ceil(miniMapSize / size) + 'px';
+							symbol.style.height = Math.ceil(miniMapSize / size) + 'px';
+							symbol.style.left = Math.floor(c * miniMapSize / size) + 'px';
+							symbol.style.top = Math.floor(r * miniMapSize / size) + 'px';
+							symbol.style.position = 'absolute';
+							miniMapElem.appendChild(symbol);
 							if(--player.inventory[tool.prototype.name] === 0)
 								delete player.inventory[tool.prototype.name];
 							updatePlayer();
