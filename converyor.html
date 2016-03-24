@@ -86,6 +86,9 @@
 		var debugText;
 		var infoElem;
 		var playerElem;
+		var miniMapSize = 150;
+		var miniMapElem;
+		var miniMapCursorElem;
 
 		// Constants
 		var tilesize = 32;
@@ -598,6 +601,12 @@ function inherit(subclass,base,methods){
 			}
 			for(var i = 0; i < objects.length; i++)
 				positionObject(objects[i]);
+			updateMiniMapPos();
+		}
+
+		function updateMiniMapPos(){
+			miniMapCursorElem.style.left = (scrollPos[0] * miniMapSize / size) + 'px';
+			miniMapCursorElem.style.top = (scrollPos[1] * miniMapSize / size) + 'px';
 		}
 
 		function updateTool(tool){
@@ -809,6 +818,26 @@ function inherit(subclass,base,methods){
 			infoElem.style.border = '1px solid #00f';
 			container.appendChild(infoElem);
 
+			miniMapElem = document.createElement('div');
+			miniMapElem.style.position = 'absolute';
+			miniMapElem.style.border = '1px solid #000';
+			miniMapElem.onclick = function(evt){
+				var rect = this.getBoundingClientRect();
+				scrollPos[0] = Math.min(size - viewPortWidth - 1, Math.max(0, Math.floor((evt.clientX - rect.left) / rect.width * size - viewPortWidth / 2.)));
+				scrollPos[1] = Math.min(size - viewPortHeight - 1, Math.max(0, Math.floor((evt.clientY - rect.top) / rect.height * size - viewPortHeight / 2.)));
+				updateAllTiles();
+			};
+			container.appendChild(miniMapElem);
+			miniMapElem.style.width = miniMapSize + 'px';
+			miniMapElem.style.height = miniMapSize + 'px';
+			miniMapCursorElem = document.createElement('div');
+			miniMapCursorElem.style.backgroundColor = '#ccffff';
+			miniMapCursorElem.style.position = 'absolute';
+			miniMapCursorElem.style.width = ((viewPortWidth + 1) * miniMapSize / size - 1) + 'px';
+			miniMapCursorElem.style.height = ((viewPortHeight + 1) * miniMapSize / size - 1) + 'px';
+			miniMapCursorElem.style.border = '1px solid #000';
+			miniMapElem.appendChild(miniMapCursorElem);
+
 			playerElem = document.createElement('div');
 			playerElem.style.borderStyle = 'solid';
 			playerElem.style.borderWidth = '1px';
@@ -830,11 +859,18 @@ function inherit(subclass,base,methods){
 
 		function onSize(){
 			var tableRect = table.getBoundingClientRect();
+
+			miniMapElem.style.left = (tableRect.right + 20) + 'px';
+			miniMapElem.style.top = '0px';
+			miniMapElem.style.left = (tableRect.right + 20) + 'px';
+			var mrect = miniMapElem.getBoundingClientRect();
+			updateMiniMapPos();
+
 			var rect = infoElem.getBoundingClientRect();
 			infoElem.style.left = (tableRect.right + 20) + 'px';
-			infoElem.style.top = '0px';
+			infoElem.style.top = (mrect.height + 20) + 'px';
 			infoElem.style.width = '150px';
-			infoElem.style.height = tableRect.height + 'px';
+			infoElem.style.height = (tableRect.height - mrect.height - 20) + 'px';
 			infoElem.style.textAlign = 'left';
 		}
 
