@@ -277,6 +277,14 @@ function inherit(subclass,base,methods){
 		}
 		inherit(Container, Structure);
 
+		/// Print contents of inventory
+		Container.prototype.desc = function(tile){
+			var ret = "Items:<br>";
+			for(var i in this.inventory)
+				ret += "  " + i + ": " + this.inventory[i] + "<br>";
+			return ret;
+		};
+
 		Container.prototype.input = function(o){
 			this.addItem(o);
 			return true;
@@ -317,13 +325,6 @@ function inherit(subclass,base,methods){
 				imgElem.style.top = '0px';
 				imgElem.style.position = 'absolute';
 				tileElem.appendChild(imgElem);
-			},
-
-			desc: function(tile){
-				var ret = "Items:<br>";
-				for(var i in this.inventory)
-					ret += "  " + i + ": " + this.inventory[i] + "<br>";
-				return ret;
 			},
 		});
 
@@ -446,24 +447,82 @@ function inherit(subclass,base,methods){
 			}
 		});
 
-		// Destroyer
-		function Destroyer(){
+		// Assembler
+		function Assembler(){
+			Container.call(this);
+			this.cooldown = 0;
 			this.consumeCooldown = 0;
+			this.recipe = {
+				input: {'M': 1},
+				output: {'Transport Belt': 1},
+				time: 20,
+			};
 		}
-		inherit(Destroyer, Structure, {
-			name: "Destroyer",
-			symbol: 'D',
+		inherit(Assembler, Container, {
+			name: "Assembler",
+			symbol: 'A',
+
+			desc: function(tile){
+				if(!this.recipe)
+					return "No recipe";
+				var ret = "Inputs: <br>";
+				for(var k in this.recipe.input)
+					ret += k + ": " + this.recipe.input[k] + "<br>";
+				ret += "<br>Outputs:<br>";
+				for(var k in this.recipe.output)
+					ret += k + ": " + this.recipe.output[k] + "<br>";
+				ret += "Time: " + (this.recipe.time - this.cooldown) + "/" + this.recipe.time + "<br>";
+				return ret + Container.prototype.desc.call(this);
+			},
+
 			frameProc: function(tile){
-				if(tile.consumeCooldown < 1)
-					tile.consumeCooldown = 0;
+				if(this.cooldown < 1)
+					this.cooldown = 0;
 				else
-					tile.consumeCooldown--;
+					this.cooldown--;
 			},
 			input: function(o){
-				if(o.type !== 'M')
+				if(!this.recipe)
+					return;
+				if(!(o.type in this.recipe.input))
 					return false;
-				this.consumeCooldown = 20;
+				this.addItem(o);
+
+				var good = true;
+				for(var k in this.recipe.input){
+					if(this.inventory[k] && this.recipe.input[k] <= this.inventory[k])
+						;
+					else{
+						good = false;
+						break;
+					}
+				}
+
+				if(good){
+					for(var k in this.recipe.input){
+						this.inventory[k] -= this.recipe.input[k];
+						if(this.inventory[k] === 0)
+							delete this.inventory[k];
+					}
+					for(var k in this.recipe.output){
+						this.inventory[k] = (this.inventory[k] || 0) + this.recipe.output[k];
+					}
+					this.cooldown = this.recipe.time;
+				}
 				return true;
+			},
+
+			output: function(dx, dy){
+				for(var k in this.inventory){
+					if(this.recipe && this.recipe.input[k])
+						continue;
+					if(newObject(dx, dy, k)){
+						if(--this.inventory[k] === 0)
+							delete this.inventory[k];
+						return true;
+					}
+				}
+				return false;
 			}
 		});
 
@@ -473,7 +532,7 @@ function inherit(subclass,base,methods){
 			Chest,
 			OreMine,
 			Furnace,
-			Destroyer,
+			Assembler,
 		];
 
 		var currentTool = -1;
@@ -982,7 +1041,7 @@ function inherit(subclass,base,methods){
 			player.inventory['Chest'] = 10;
 			player.inventory['Ore Mine'] = 5;
 			player.inventory['Furnace'] = 3;
-			player.inventory['Destroyer'] = 3;
+			player.inventory['Assembler'] = 3;
 			updatePlayer();
 		}
 
@@ -1029,8 +1088,11 @@ function inherit(subclass,base,methods){
 				obj.elem.style.backgroundImage = 'url("img/ore.png")';
 			else if(type === 'M')
 				obj.elem.style.backgroundImage = 'url("img/metal.png")';
+			else if(type === 'Transport Belt')
+				obj.elem.style.backgroundImage = 'url("img/transport.png")';
 			else
 				obj.elem.innerHTML = type;
+			obj.elem.style.backgroundSize = objsize + 'px ' + objsize + 'px';
 			// Debug graphic for bounding box
 //			obj.elem.style.border = '1px solid';
 			obj.elem.style.width = objsize + 'px';
