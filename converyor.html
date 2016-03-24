@@ -158,6 +158,10 @@ function inherit(subclass,base,methods){
 			return false;
 		};
 
+		// Default is unable to input or output items.
+		Structure.prototype.input = function(){return false};
+		Structure.prototype.output = function(){return false};
+
 		// Transport belt
 		function TransportBelt(){}
 		inherit(TransportBelt, Structure, {
@@ -1081,6 +1085,9 @@ function inherit(subclass,base,methods){
 		/// Insert an object on the board.  It could fail if there's already some object at the position.
 		function newObject(c, r, type){
 			var obj = {id: serialNo++, type: type, x: c * tilesize + tilesize / 2, y: r * tilesize + tilesize / 2};
+			if(0 <= c && c < size && 0 <= r && r < size && board[c + r * size].structure && !board[c + r * size].structure.movable()){
+				return board[c + r * size].structure.input(obj);
+			}
 			if(hitCheck(obj.x, obj.y))
 				return false;
 			obj.elem = document.createElement('div');
