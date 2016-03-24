@@ -538,17 +538,6 @@ function inherit(subclass,base,methods){
 
 			generateBoard();
 
-			// Initial inventory of player
-			player.inventory['O'] = 50;
-			player.inventory['M'] = 10;
-			player.inventory['Transport Belt'] = 20;
-			player.inventory['Inserter'] = 10;
-			player.inventory['Chest'] = 10;
-			player.inventory['Ore Mine'] = 5;
-			player.inventory['Furnace'] = 3;
-			player.inventory['Destroyer'] = 3;
-			updatePlayer();
-
 			// Set animation update function
 			window.setInterval(function(){
 				run();
@@ -969,7 +958,20 @@ function inherit(subclass,base,methods){
 			for(var i = 0; i < size * size; i++)
 				board[i] = newblock();
 
+			scrollPos = [0, 0];
+
 			createElements();
+
+			// Initial inventory of player
+			player.inventory['O'] = 50;
+			player.inventory['M'] = 10;
+			player.inventory['Transport Belt'] = 20;
+			player.inventory['Inserter'] = 10;
+			player.inventory['Chest'] = 10;
+			player.inventory['Ore Mine'] = 5;
+			player.inventory['Furnace'] = 3;
+			player.inventory['Destroyer'] = 3;
+			updatePlayer();
 		}
 
 		function newblock(){
