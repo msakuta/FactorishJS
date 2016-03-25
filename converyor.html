@@ -466,6 +466,15 @@ function inherit(subclass,base,methods){
 			name: "Assembler",
 			symbol: 'A',
 
+			draw: function(tileElem){
+				var imgElem = document.createElement('img');
+				imgElem.src = 'img/assembler.png';
+				imgElem.style.left = '0px';
+				imgElem.style.top = '0px';
+				imgElem.style.position = 'absolute';
+				tileElem.appendChild(imgElem);
+			},
+
 			desc: function(tile){
 				if(!this.recipe)
 					return "No recipe";
@@ -977,6 +986,8 @@ function inherit(subclass,base,methods){
 					img.src = "img/mine.png";
 				else if(i === 'Furnace')
 					img.src = "img/furnace.png";
+				else if(i === 'Assembler')
+					img.src = "img/assembler.png";
 				img.style.width = objsize + 'px';
 				img.style.height = objsize + 'px';
 				div.appendChild(img);
