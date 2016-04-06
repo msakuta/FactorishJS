@@ -394,87 +394,15 @@ function inherit(subclass,base,methods){
 			}
 		});
 
-		// Furnace
-		function Furnace(){
-			this.cooldown = 0;
-			this.consumeCooldown = 0;
-		}
-		inherit(Furnace, Structure, {
-			name: "Furnace",
-			symbol: 'F',
-
-			draw: function(tileElem){
-				var imgElem = document.createElement('img');
-				imgElem.src = 'img/furnace.png';
-				imgElem.style.left = '0px';
-				imgElem.style.top = '0px';
-				imgElem.style.position = 'absolute';
-				tileElem.appendChild(imgElem);
-			},
-
-			desc: function(tile){
-				return "Inputs: Ore<br>" +
-					"&nbsp;&nbsp;x " + (this.inputMetals || 0) + "<br>" +
-					"Outputs: Metal plate<br>" +
-					"Time: 20";
-			},
-
-			frameProc: function(){
-				if(this.cooldown < 1)
-					this.cooldown = 0;
-				else
-					this.cooldown--;
-				if(this.consumeCooldown < 1)
-					this.consumeCooldown = 0;
-				else
-					this.consumeCooldown--;
-			},
-			input: function(o){
-				if(o.type !== 'O')
-					return false;
-				this.consumeCooldown = 20;
-				this.inputMetals = (this.inputMetals || 0) + 1;
-				return true;
-			},
-			output: function(dx, dy){
-				if(0 < this.cooldown)
-					return false;
-				if(!this.inputMetals)
-					return false;
-				if(newObject(dx, dy, 'M')){
-					this.cooldown = 70;
-					this.inputMetals--;
-					return true;
-				}
-				else
-					return false;
-			}
-		});
-
-		// Assembler
-		function Assembler(){
+		// The base class for all factory classes, which produces something
+		// out from ingredients
+		function Factory(){
 			Container.call(this);
 			this.cooldown = 0;
 			this.consumeCooldown = 0;
-			this.recipe = {
-				input: {'M': 1},
-				output: {'Transport Belt': 1},
-				time: 20,
-			};
+			this.recipe = null;
 		}
-		inherit(Assembler, Container, {
-			name: "Assembler",
-			symbol: 'A',
-
-			draw: function(tileElem){
-				var imgElem = document.createElement('img');
-				imgElem.src = 'img/assembler.png';
-				imgElem.style.left = '0px';
-				imgElem.style.top = '0px';
-				imgElem.style.position = 'absolute';
-				tileElem.appendChild(imgElem);
-			},
-
+		inherit(Factory, Container, {
 			desc: function(tile){
 				if(!this.recipe)
 					return "No recipe";
@@ -496,8 +424,10 @@ function inherit(subclass,base,methods){
 			},
 			input: function(o){
 				if(!this.recipe)
-					return;
+					return false;
 				if(!(o.type in this.recipe.input))
+					return false;
+				if(0 < this.cooldown)
 					return false;
 				this.addItem(o);
 
@@ -537,6 +467,52 @@ function inherit(subclass,base,methods){
 				}
 				return false;
 			}
+		});
+
+		// Furnace
+		function Furnace(){
+			Factory.call(this);
+			this.recipe = {
+				input: {'O': 1},
+				output: {'M': 1},
+				time: 20,
+			};
+		}
+		inherit(Furnace, Factory, {
+			name: "Furnace",
+			symbol: 'F',
+
+			draw: function(tileElem){
+				var imgElem = document.createElement('img');
+				imgElem.src = 'img/furnace.png';
+				imgElem.style.left = '0px';
+				imgElem.style.top = '0px';
+				imgElem.style.position = 'absolute';
+				tileElem.appendChild(imgElem);
+			},
+		});
+
+		// Assembler
+		function Assembler(){
+			Factory.call(this);
+			this.recipe = {
+				input: {'M': 1},
+				output: {'Transport Belt': 1},
+				time: 20,
+			};
+		}
+		inherit(Assembler, Factory, {
+			name: "Assembler",
+			symbol: 'A',
+
+			draw: function(tileElem){
+				var imgElem = document.createElement('img');
+				imgElem.src = 'img/assembler.png';
+				imgElem.style.left = '0px';
+				imgElem.style.top = '0px';
+				imgElem.style.position = 'absolute';
+				tileElem.appendChild(imgElem);
+			},
 		});
 
 		var toolDefs = [
