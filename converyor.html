@@ -20,6 +20,30 @@
 				line-height: 80%;
 			}
 
+			#recipeSelector{
+				position: absolute;
+				width: 250px;
+				height: 300px;
+				left: 50%;
+				top: 50%;
+				margin-left: -125px;
+				margin-top: -150px;
+				padding: 2px;
+				border: 2px solid #000000;
+				background-color: #ffffaf;
+				text-align: left;
+			}
+
+			div.closeButton{
+				position: absolute;
+				width: 16px;
+				height: 16px;
+				right: 2px;
+				top: 2px;
+				border: 1px solid #7f7f7f;
+				background-image: url("img/close.png");
+			}
+
 			#points{
 				font-size: 25px;
 			}
@@ -64,7 +88,13 @@
 		</select>
 		<input type="button" onclick="generateBoard()" value="Start">
 		<hr>
-		<div id="container"></div>
+		<div style="position: relative">
+			<div id="container"></div>
+			<div id="recipeSelector">
+				<div id="recipeSelectorContent"></div>
+				<div class="closeButton" onclick="hideRecipeSelect()"></div>
+			</div>
+		</div>
 		<div id="points"></div>
 		<hr>
 		<div id="highScores"></div>
@@ -89,6 +119,7 @@
 		var miniMapSize = 150;
 		var miniMapElem;
 		var miniMapCursorElem;
+		var recipeTarget = null;
 
 		// Constants
 		var tilesize = 32;
@@ -425,13 +456,7 @@ function inherit(subclass,base,methods){
 				var ret = "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>"
 					+ "<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #00ffff'></div></div>";
 
-				ret += "Recipe: <div style='border: 1px solid #0000ff; margin: 2px; background-color: #afafff'>Inputs: <br>";
-				for(var k in this.recipe.input)
-					ret += k + ": " + this.recipe.input[k] + "<br>";
-				ret += "<br>Outputs:<br>";
-				for(var k in this.recipe.output)
-					ret += k + ": " + this.recipe.output[k] + "<br>";
-				ret += "Time: " + this.recipe.time + "<br></div>";
+				ret += "Recipe: " + recipeDraw(this.recipe);
 				return ret + Container.prototype.desc.call(this);
 			},
 
@@ -525,11 +550,6 @@ function inherit(subclass,base,methods){
 		// Assembler
 		function Assembler(){
 			Factory.call(this);
-			this.recipe = {
-				input: {'M': 1},
-				output: {'Transport Belt': 1},
-				time: 20,
-			};
 		}
 		inherit(Assembler, Factory, {
 			name: "Assembler",
@@ -542,6 +562,21 @@ function inherit(subclass,base,methods){
 				imgElem.style.top = '0px';
 				imgElem.style.position = 'absolute';
 				tileElem.appendChild(imgElem);
+			},
+
+			recipes: function(){
+				return [
+					{
+						input: {'M': 1},
+						output: {'Gear': 1},
+						time: 20,
+					},
+					{
+						input: {'M': 1, 'Gear': 1},
+						output: {'Transport Belt': 1},
+						time: 20,
+					},
+				]
 			},
 		});
 
@@ -580,6 +615,57 @@ function inherit(subclass,base,methods){
 			}
 		}
 
+		function recipeDraw(recipe, onclick){
+			var ret = "";
+			ret += "<div style='border: 1px solid #0000ff; margin: 4px; background-color: #afafff'"
+				+ (onclick ? " onclick='" + onclick + "'" : "") + ">Inputs: <br>";
+			for(var k in recipe.input)
+				ret += "&nbsp;" + k + ": " + recipe.input[k] + "<br>";
+			ret += "Outputs:<br>";
+			for(var k in recipe.output)
+				ret += "&nbsp;" + k + ": " + recipe.output[k] + "<br>";
+			ret += "Time: " + recipe.time + "<br></div>";
+			return ret;
+		}
+
+		function recipeSelectClick(i){
+			if(!recipeTarget)
+				return;
+			var recipes = recipeTarget.recipes();
+			recipeTarget.recipe = recipes[i];
+			recipeTarget.cooldown = 0;
+			recipeTarget.processing = false;
+			var recipeSelector = document.getElementById('recipeSelector');
+			recipeSelector.style.display = "none";
+		}
+
+		function showRecipeSelect(tile){
+			var recipeSelector = document.getElementById('recipeSelector');
+			var recipeSelectorContent = document.getElementById('recipeSelectorContent');
+			if(recipeSelector.style.display !== "none"){
+				recipeSelector.style.display = "none";
+				return;
+			}
+			else if(tile.structure && tile.structure.recipes){
+				recipeSelector.style.display = "block";
+				recipeTarget = tile.structure;
+				var text = "Select a recipe";
+				var recipes = tile.structure.recipes();
+				for(var i = 0; i < recipes.length; i++)
+					text += recipeDraw(recipes[i], "recipeSelectClick(" + i + ")");
+				recipeSelectorContent.innerHTML = text;
+			}
+			else{
+				recipeTarget = null;
+				recipeSelectorContent.innerHTML = "No recipes available";
+			}
+		}
+
+		function hideRecipeSelect(){
+			var recipeSelector = document.getElementById('recipeSelector');
+			recipeSelector.style.display = "none";
+		}
+
 		function onKeyDown(event){
 			// "R" key rotates the tile
 			if(event.keyCode === 82){
@@ -613,6 +699,12 @@ function inherit(subclass,base,methods){
 
 		window.onload = function(){
 			window.addEventListener( 'keydown', onKeyDown, false );
+
+			// Set element style to initialize invisible element.
+			// CSS value won't be returned by JavaScript property access, so we
+			// need to write the initial value from the code.
+			var recipeSelector = document.getElementById('recipeSelector');
+			recipeSelector.style.display = "none";
 
 			generateBoard();
 
@@ -796,6 +888,7 @@ function inherit(subclass,base,methods){
 						}
 						else{
 							// If mouse button is clicked without any tool selected, try to open it (WIP).
+							showRecipeSelect(tile);
 						}
 						updateTile(tile);
 						return false;
@@ -993,6 +1086,8 @@ function inherit(subclass,base,methods){
 				}
 				else if(i === 'M')
 					img.src = 'img/metal.png';
+				else if(i === 'Gear')
+					img.src = 'img/gear.png';
 				else if(i === 'Transport Belt')
 					img.src = 'img/transport.png';
 				else if(i === 'Inserter')
@@ -1123,6 +1218,8 @@ function inherit(subclass,base,methods){
 				obj.elem.style.backgroundImage = 'url("img/ore.png")';
 			else if(type === 'M')
 				obj.elem.style.backgroundImage = 'url("img/metal.png")';
+			else if(type === 'Gear')
+				obj.elem.style.backgroundImage = 'url("img/gear.png")';
 			else if(type === 'Transport Belt')
 				obj.elem.style.backgroundImage = 'url("img/transport.png")';
 			else
