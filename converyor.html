@@ -754,22 +754,33 @@ function inherit(subclass,base,methods){
 						var idx = tileElems.indexOf(this);
 						var c = idx % viewPortWidth + scrollPos[0];
 						var r = Math.floor(idx / viewPortWidth) + scrollPos[1];
+						var tile = board[c + r * size];
 
 						if(e.button !== 0){
-							harvest(board[c + r * size]);
+							harvest(tile);
 						}
 						else if(0 <= currentTool && currentTool < toolDefs.length){
 							var tool = toolDefs[currentTool];
+
+							// Prevent resetting structure's progress and inventory if
+							// the user clicks on a structure with the same tool type.
+							// But update the rotation.
+							if(tile.structure && tool.prototype.name === tile.structure.name){
+								tile.structure.rotation = currentRotation;
+								updateTile(tile);
+								return;
+							}
+
 							if(!(tool.prototype.name in player.inventory) || !player.inventory[tool.prototype.name])
 								return;
-							harvest(board[c + r * size]);
+							harvest(tile);
 							// The tile and the structure built on it should be different
 							// object, because it would force us to recreate and replace existing tile object
 							// everytime structure is built on it.
-							board[c + r * size].structure = new tool;
-							board[c + r * size].structure.tile = board[c + r * size];
-							board[c + r * size].structure.rotation = currentRotation;
-							var symbol = board[c + r * size].structure.miniMapSymbol = document.createElement('div');
+							tile.structure = new tool;
+							tile.structure.tile = board[c + r * size];
+							tile.structure.rotation = currentRotation;
+							var symbol = tile.structure.miniMapSymbol = document.createElement('div');
 							symbol.style.backgroundColor = '#0000ff';
 							symbol.style.width = Math.ceil(miniMapSize / size) + 'px';
 							symbol.style.height = Math.ceil(miniMapSize / size) + 'px';
@@ -784,7 +795,7 @@ function inherit(subclass,base,methods){
 						else{
 							// If mouse button is clicked without any tool selected, try to open it (WIP).
 						}
-						updateTile(board[c + r * size]);
+						updateTile(tile);
 						return false;
 					}
 
