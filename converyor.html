@@ -436,16 +436,40 @@ function inherit(subclass,base,methods){
 			},
 
 			frameProc: function(tile){
-				if(this.recipe && this.processing){
-					if(this.cooldown < 1){
-						this.processing = false;
-						this.cooldown = 0;
-						for(var k in this.recipe.output){
-							this.inventory[k] = (this.inventory[k] || 0) + this.recipe.output[k];
+				if(this.recipe){
+					if(this.processing){
+						if(this.cooldown < 1){
+							this.processing = false;
+							this.cooldown = 0;
+							for(var k in this.recipe.output){
+								this.inventory[k] = (this.inventory[k] || 0) + this.recipe.output[k];
+							}
 						}
+						else
+							this.cooldown--;
 					}
-					else
-						this.cooldown--;
+					else{
+						var good = true;
+						for(var k in this.recipe.input){
+							if(this.inventory[k] && this.recipe.input[k] <= this.inventory[k])
+								;
+							else{
+								good = false;
+								break;
+							}
+						}
+
+						if(good){
+							for(var k in this.recipe.input){
+								this.inventory[k] -= this.recipe.input[k];
+								if(this.inventory[k] === 0)
+									delete this.inventory[k];
+							}
+							this.processing = true;
+							this.cooldown = this.recipe.time;
+						}
+						return true;
+					}
 				}
 			},
 
@@ -458,28 +482,6 @@ function inherit(subclass,base,methods){
 					return false;
 				this.addItem(o);
 
-				if(this.processing)
-					return true;
-
-				var good = true;
-				for(var k in this.recipe.input){
-					if(this.inventory[k] && this.recipe.input[k] <= this.inventory[k])
-						;
-					else{
-						good = false;
-						break;
-					}
-				}
-
-				if(good){
-					for(var k in this.recipe.input){
-						this.inventory[k] -= this.recipe.input[k];
-						if(this.inventory[k] === 0)
-							delete this.inventory[k];
-					}
-					this.processing = true;
-					this.cooldown = this.recipe.time;
-				}
 				return true;
 			},
 
