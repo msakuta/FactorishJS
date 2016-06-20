@@ -336,6 +336,7 @@ function inherit(subclass,base,methods){
 		function OreMine(){
 			Structure.call(this);
 			this.cooldown = 0;
+			this.recipe = null;
 		}
 		inherit(OreMine, Structure, {
 			name: "Ore Mine",
@@ -356,12 +357,24 @@ function inherit(subclass,base,methods){
 			},
 
 			desc: function(tile){
-				return "Outputs: Ore<br>" +
-					"Time: 50<br>" +
-					"Expected output: " + tile.ironOre;
+				var ret = ""
+				// Progress bar
+				if(this.recipe)
+					ret += "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
+						"<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #ff00ff'></div></div>" +
+						"Expected output: " + tile.ironOre + "<br>";
+				ret += "Outputs: Ore<br>" +
+					"Time: 50<br>";
+				return ret;
 			},
 
 			frameProc: function(){
+				if(this.recipe === null){
+					if(0 < this.tile.ironOre){
+						this.recipe = {time: 80};
+						this.cooldown = this.recipe.time;
+					}
+				}
 				if(this.cooldown < 1)
 					this.cooldown = 0;
 				else
@@ -385,7 +398,7 @@ function inherit(subclass,base,methods){
 				if(this.tile.ironOre <= 0)
 					return false; // Exhausted
 				if(newObject(dx, dy, 'O')){
-					this.cooldown = 80;
+					this.cooldown = this.recipe.time;
 					this.tile.ironOre--;
 					return true;
 				}
@@ -401,27 +414,41 @@ function inherit(subclass,base,methods){
 			this.cooldown = 0;
 			this.consumeCooldown = 0;
 			this.recipe = null;
+			this.processing = false;
 		}
 		inherit(Factory, Container, {
 			desc: function(tile){
 				if(!this.recipe)
 					return "No recipe";
-				var ret = "Inputs: <br>";
+
+				// Progress bar
+				var ret = "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>"
+					+ "<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #00ffff'></div></div>";
+
+				ret += "Recipe: <div style='border: 1px solid #0000ff; margin: 2px; background-color: #afafff'>Inputs: <br>";
 				for(var k in this.recipe.input)
 					ret += k + ": " + this.recipe.input[k] + "<br>";
 				ret += "<br>Outputs:<br>";
 				for(var k in this.recipe.output)
 					ret += k + ": " + this.recipe.output[k] + "<br>";
-				ret += "Time: " + (this.recipe.time - this.cooldown) + "/" + this.recipe.time + "<br>";
+				ret += "Time: " + this.recipe.time + "<br></div>";
 				return ret + Container.prototype.desc.call(this);
 			},
 
 			frameProc: function(tile){
-				if(this.cooldown < 1)
-					this.cooldown = 0;
-				else
-					this.cooldown--;
+				if(this.recipe && this.processing){
+					if(this.cooldown < 1){
+						this.processing = false;
+						this.cooldown = 0;
+						for(var k in this.recipe.output){
+							this.inventory[k] = (this.inventory[k] || 0) + this.recipe.output[k];
+						}
+					}
+					else
+						this.cooldown--;
+				}
 			},
+
 			input: function(o){
 				if(!this.recipe)
 					return false;
@@ -430,6 +457,9 @@ function inherit(subclass,base,methods){
 				if(0 < this.cooldown)
 					return false;
 				this.addItem(o);
+
+				if(this.processing)
+					return true;
 
 				var good = true;
 				for(var k in this.recipe.input){
@@ -447,9 +477,7 @@ function inherit(subclass,base,methods){
 						if(this.inventory[k] === 0)
 							delete this.inventory[k];
 					}
-					for(var k in this.recipe.output){
-						this.inventory[k] = (this.inventory[k] || 0) + this.recipe.output[k];
-					}
+					this.processing = true;
 					this.cooldown = this.recipe.time;
 				}
 				return true;
