@@ -123,7 +123,8 @@
 
 		// Constants
 		var tilesize = 32;
-		var objsize = tilesize / 2;
+		var objsize = tilesize / 3;
+		var objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
 
 		var toolBarElem;
 		var toolElems = [];
@@ -290,7 +291,7 @@ function inherit(subclass,base,methods){
 
 				// If the destinatoin is a destroyer, put the object into the destroyer and cosume it.
 				findItem(sx, sy, function(o){
-					return destTile.structure.input(o);
+					return destTile.structure && destTile.structure.input(o);
 				}, true);
 			}
 		});
@@ -1127,8 +1128,8 @@ function inherit(subclass,base,methods){
 					img.src = "img/furnace.png";
 				else if(i === 'Assembler')
 					img.src = "img/assembler.png";
-				img.style.width = objsize + 'px';
-				img.style.height = objsize + 'px';
+				img.style.width = objViewSize + 'px';
+				img.style.height = objViewSize + 'px';
 				div.appendChild(img);
 				var text = document.createElement('span');
 				text.innerHTML = v + ' ' + i;
@@ -1251,11 +1252,11 @@ function inherit(subclass,base,methods){
 				obj.elem.style.backgroundImage = 'url("img/transport.png")';
 			else
 				obj.elem.innerHTML = type;
-			obj.elem.style.backgroundSize = objsize + 'px ' + objsize + 'px';
+			obj.elem.style.backgroundSize = objViewSize + 'px ' + objViewSize + 'px';
 			// Debug graphic for bounding box
 //			obj.elem.style.border = '1px solid';
-			obj.elem.style.width = objsize + 'px';
-			obj.elem.style.height = objsize + 'px';
+			obj.elem.style.width = objViewSize + 'px';
+			obj.elem.style.height = objViewSize + 'px';
 			obj.elem.style.position = 'absolute';
 			// Disable mouse events since we don't want an object to catch mouse event when
 			// we're adding a structure to a tile.
@@ -1275,8 +1276,8 @@ function inherit(subclass,base,methods){
 				return;
 			}
 			obj.elem.style.display = 'block';
-			obj.elem.style.left = (vx - objsize / 2) + 'px';
-			obj.elem.style.top = (vy - objsize / 2) + 'px';
+			obj.elem.style.left = (vx - objViewSize / 2) + 'px';
+			obj.elem.style.top = (vy - objViewSize / 2) + 'px';
 		}
 
 		var simstep = 0;
