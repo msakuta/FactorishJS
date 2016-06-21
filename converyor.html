@@ -289,19 +289,9 @@ function inherit(subclass,base,methods){
 				}
 
 				// If the destinatoin is a destroyer, put the object into the destroyer and cosume it.
-				if(destTile.structure && destTile.structure.input){
-					for(var j = 0; j < objects.length; j++){
-						var o = objects[j];
-						var otx = Math.floor(o.x / tilesize);
-						var oty = Math.floor(o.y / tilesize);
-						if(otx === sx && oty === sy && destTile.structure.input(o)){
-							table.removeChild(o.elem);
-							objects.splice(j, 1);
-							this.cooldown = 10;
-							return;
-						}
-					}
-				}
+				findItem(sx, sy, function(o){
+					return destTile.structure.input(o);
+				}, true);
 			}
 		});
 
@@ -615,6 +605,30 @@ function inherit(subclass,base,methods){
 			}
 		}
 
+		/// Searches through all dropped items matching position sx and sy in
+		/// the world and check with proc functon passed by the caller.
+		/// if proc returns nonzero, the item is considered consumed and
+		/// disappear from the ground.
+		function findItem(sx, sy, proc, single){
+			for(var j = 0; j < objects.length;){
+				var o = objects[j];
+				var otx = Math.floor(o.x / tilesize);
+				var oty = Math.floor(o.y / tilesize);
+				if(otx === sx && oty === sy && proc(o)){
+					table.removeChild(o.elem);
+					objects.splice(j, 1);
+					this.cooldown = 10;
+					if(single)
+						return;
+				}
+				else{
+					// If we happend to successfully find the object and remove
+					// it from object list, incrementing j would skip one extra item.
+					j++;
+				}
+			}
+		}
+
 		function recipeDraw(recipe, onclick){
 			var ret = "";
 			ret += "<div style='border: 1px solid #0000ff; margin: 4px; background-color: #afafff'"
@@ -798,6 +812,19 @@ function inherit(subclass,base,methods){
 					player.inventory[tile.structure.name] = 1;
 				tile.structure = null;
 				updatePlayer();
+			}
+			else{
+				var idx = board.indexOf(tile);
+				var x = idx % size;
+				var y = Math.floor(idx / size);
+				findItem(x, y, function(o){
+					if(o.type in player.inventory)
+						player.inventory[o.type] += 1;
+					else
+						player.inventory[o.type] = 1;
+					updatePlayer();
+					return true;
+				});
 			}
 		}
 
