@@ -633,14 +633,30 @@ function inherit(subclass,base,methods){
 		function recipeDraw(recipe, onclick){
 			var ret = "";
 			ret += "<div style='border: 1px solid #0000ff; margin: 4px; background-color: #afafff'"
-				+ (onclick ? " onclick='" + onclick + "'" : "") + ">Inputs: <br>";
+				+ (onclick ? " onclick='" + onclick + "'" : "") + ">";
+			ret += "<span style='display: inline-block; vertical-align: middle'>" +
+				getHTML(generateItemImage("time", true, recipe.time), true) + "</span>";
+			ret += "<span style='display: inline-block; width: 33%; vertical-align: middle'>";
 			for(var k in recipe.input)
-				ret += "&nbsp;" + k + ": " + recipe.input[k] + "<br>";
-			ret += "Outputs:<br>";
+				ret += "&nbsp;" + getHTML(generateItemImage(k, true, recipe.input[k]), true);
+			ret += "</span>-&gt;<span style='display: inline-block; width: 33%; vertical-align: middle'>";
 			for(var k in recipe.output)
-				ret += "&nbsp;" + k + ": " + recipe.output[k] + "<br>";
-			ret += "Time: " + recipe.time + "<br></div>";
+				ret += "&nbsp;" + getHTML(generateItemImage(k, true, recipe.output[k]), true);
+			ret += "</span></div>";
 			return ret;
+		}
+
+		/// Convert a HTML element to string.
+		/// If deep === true, descendants are serialized, too.
+		function getHTML(who, deep){
+			var div = document.createElement('div');
+			div.appendChild(who.cloneNode(false));
+			var txt = div.innerHTML;
+			if(deep){
+				var ax = txt.indexOf('>')+1;
+				txt= txt.substring(0, ax)+who.innerHTML+ txt.substring(ax);
+			}
+			return txt;
 		}
 
 		function recipeSelectClick(i){
@@ -1100,6 +1116,52 @@ function inherit(subclass,base,methods){
 				(tile.structure.desc ? tile.structure.desc(tile) : "");
 		}
 
+		function generateItemImage(i, iconSize, count){
+			var img = document.createElement('img');
+			if(i === 'time')
+				img.src = 'img/time.png';
+			else if(i === 'O')
+				img.src = 'img/ore.png';
+			else if(i === 'M')
+				img.src = 'img/metal.png';
+			else if(i === 'Gear')
+				img.src = 'img/gear.png';
+			else if(i === 'Transport Belt')
+				img.src = 'img/transport.png';
+			else if(i === 'Inserter')
+				img.src = 'img/inserter-base.png';
+			else if(i === 'Chest')
+				img.src = 'img/chest.png';
+			else if(i === 'Ore Mine')
+				img.src = "img/mine.png";
+			else if(i === 'Furnace')
+				img.src = "img/furnace.png";
+			else if(i === 'Assembler')
+				img.src = "img/assembler.png";
+			var size = iconSize ? 32 : objViewSize;
+			img.style.width = size + 'px';
+			img.style.height = size + 'px';
+			if(iconSize && count){
+				var container = document.createElement('span');
+				container.style.position = 'relative';
+				container.appendChild(img);
+				var overlay = document.createElement('div');
+				overlay.style.position = 'absolute';
+				overlay.style.width = size + 'px';
+				//overlay.style.height = size + 'px';
+				overlay.style.left = '0px';
+				overlay.style.top = '0px';
+				overlay.style.color = 'rgb(0,0,0)';
+				overlay.style.fontWeight = 'bold';
+				overlay.style.textShadow = '1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff';
+				overlay.style.textAlign = 'right';
+				overlay.innerHTML = count;
+				container.appendChild(overlay);
+				return container;
+			}
+			return img;
+		}
+
 		function updatePlayer(){
 			// Clear the elements first
 			while(playerElem.firstChild)
@@ -1108,29 +1170,7 @@ function inherit(subclass,base,methods){
 			for(var i in player.inventory){
 				var v = player.inventory[i];
 				var div = document.createElement('div');
-				var img = document.createElement('img');
-				if(i === 'O'){
-					img.src = 'img/ore.png';
-				}
-				else if(i === 'M')
-					img.src = 'img/metal.png';
-				else if(i === 'Gear')
-					img.src = 'img/gear.png';
-				else if(i === 'Transport Belt')
-					img.src = 'img/transport.png';
-				else if(i === 'Inserter')
-					img.src = 'img/inserter-base.png';
-				else if(i === 'Chest')
-					img.src = 'img/chest.png';
-				else if(i === 'Ore Mine')
-					img.src = "img/mine.png";
-				else if(i === 'Furnace')
-					img.src = "img/furnace.png";
-				else if(i === 'Assembler')
-					img.src = "img/assembler.png";
-				img.style.width = objViewSize + 'px';
-				img.style.height = objViewSize + 'px';
-				div.appendChild(img);
+				div.appendChild(generateItemImage(i));
 				var text = document.createElement('span');
 				text.innerHTML = v + ' ' + i;
 				div.appendChild(text);
