@@ -312,7 +312,7 @@ function inherit(subclass,base,methods){
 		Container.prototype.desc = function(tile){
 			var ret = "Items:<br>";
 			for(var i in this.inventory)
-				ret += "  " + i + ": " + this.inventory[i] + "<br>";
+				ret += getHTML(generateItemImage(i, true, this.inventory[i]), true);
 			return ret;
 		};
 
