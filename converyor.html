@@ -22,16 +22,27 @@
 
 			#recipeSelector{
 				position: absolute;
-				width: 250px;
-				height: 300px;
+				width: 300px;
+				height: 400px;
 				left: 50%;
 				top: 50%;
 				margin-left: -125px;
 				margin-top: -150px;
-				padding: 2px;
 				border: 2px solid #000000;
 				background-color: #ffffaf;
 				text-align: left;
+			}
+
+			#recipeSelectorTitle{
+				width: 100%;
+				height: 20px;
+				background-color: #7f7fff;
+			}
+
+			#recipeSelectorContent{
+				height: 376px;
+				padding: 2px;
+				overflow-y: scroll;
 			}
 
 			div.closeButton{
@@ -96,6 +107,7 @@
 		<div style="position: relative">
 			<div id="container"></div>
 			<div id="recipeSelector">
+				<div id="recipeSelectorTitle">Select a recipe</div>
 				<div id="recipeSelectorContent"></div>
 				<div class="closeButton" onclick="hideRecipeSelect()"></div>
 			</div>
@@ -620,10 +632,25 @@ function inherit(subclass,base,methods){
 						time: 100,
 					},
 					{
-						input: {'M': 5, 'Gear': 10},
+						input: {'M': 5, 'Copper Plate': 5, 'Gear': 10},
 						output: {'Ore Mine': 1},
 						time: 100,
-					}
+					},
+					{
+						input: {'Copper Plate': 1},
+						output: {'Copper Wire': 1},
+						time: 20,
+					},
+					{
+						input: {'M': 1, 'Copper Wire': 1},
+						output: {'Circuit': 1},
+						time: 20,
+					},
+					{
+						input: {'M': 10, 'Copper Plate': 5, 'Circuit': 10},
+						output: {'Assembler': 1},
+						time: 120,
+					},
 				]
 			},
 		});
@@ -737,7 +764,7 @@ function inherit(subclass,base,methods){
 			else if(tile.structure && tile.structure.recipes){
 				recipeSelector.style.display = "block";
 				recipeTarget = tile.structure;
-				var text = "Select a recipe";
+				var text = "";
 				var recipes = tile.structure.recipes();
 				for(var i = 0; i < recipes.length; i++)
 					text += recipeDraw(recipes[i], "recipeSelectClick(" + i + ")");
@@ -1132,6 +1159,7 @@ function inherit(subclass,base,methods){
 			miniMapElem.appendChild(miniMapCursorElem);
 
 			playerElem = document.createElement('div');
+			playerElem.style.overflowY = 'scroll';
 			playerElem.style.borderStyle = 'solid';
 			playerElem.style.borderWidth = '1px';
 			playerElem.style.border = '1px solid #00f';
@@ -1358,7 +1386,11 @@ function inherit(subclass,base,methods){
 			case 'Copper Plate':
 				return 'img/copper-plate.png';
 			case 'Gear':
-				return  'img/gear.png';
+				return 'img/gear.png';
+			case 'Copper Wire':
+				return 'img/copper-wire.png';
+			case 'Circuit':
+				return 'img/circuit.png';
 			case 'Transport Belt':
 				return 'img/transport.png';
 			case 'Inserter':
