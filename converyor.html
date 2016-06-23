@@ -634,14 +634,14 @@ function inherit(subclass,base,methods){
 			var ret = "";
 			ret += "<div style='border: 1px solid #0000ff; margin: 4px; background-color: #afafff'"
 				+ (onclick ? " onclick='" + onclick + "'" : "") + ">";
-			ret += "<span style='display: inline-block; vertical-align: middle'>" +
+			ret += "<span style='display: inline-block; margin: 1px'>" +
 				getHTML(generateItemImage("time", true, recipe.time), true) + "</span>";
-			ret += "<span style='display: inline-block; width: 33%; vertical-align: middle'>";
+			ret += "<span style='display: inline-block; width: 30%'>";
 			for(var k in recipe.input)
-				ret += "&nbsp;" + getHTML(generateItemImage(k, true, recipe.input[k]), true);
-			ret += "</span>-&gt;<span style='display: inline-block; width: 33%; vertical-align: middle'>";
+				ret += getHTML(generateItemImage(k, true, recipe.input[k]), true);
+			ret += "</span><img src='img/rightarrow.png' style='width: 20px; height: 32px'><span style='display: inline-block; width: 30%'>";
 			for(var k in recipe.output)
-				ret += "&nbsp;" + getHTML(generateItemImage(k, true, recipe.output[k]), true);
+				ret += getHTML(generateItemImage(k, true, recipe.output[k]), true);
 			ret += "</span></div>";
 			return ret;
 		}
