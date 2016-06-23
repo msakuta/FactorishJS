@@ -567,6 +567,21 @@ function inherit(subclass,base,methods){
 						output: {'Transport Belt': 1},
 						time: 20,
 					},
+					{
+						input: {'M': 5},
+						output: {'Chest': 1},
+						time: 60,
+					},
+					{
+						input: {'M': 5, 'Gear': 3},
+						output: {'Inserter': 1},
+						time: 100,
+					},
+					{
+						input: {'M': 5, 'Gear': 10},
+						output: {'Ore Mine': 1},
+						time: 100,
+					}
 				]
 			},
 		});
@@ -1290,6 +1305,12 @@ function inherit(subclass,base,methods){
 				obj.elem.style.backgroundImage = 'url("img/gear.png")';
 			else if(type === 'Transport Belt')
 				obj.elem.style.backgroundImage = 'url("img/transport.png")';
+			else if(type === 'Inserter')
+				obj.elem.style.backgroundImage = 'url("img/inserter-base.png")';
+			else if(type === 'Chest')
+				obj.elem.style.backgroundImage = 'url("img/chest.png")';
+			else if(type === 'Ore Mine')
+				obj.elem.style.backgroundImage = 'url("img/mine.png")';
 			else
 				obj.elem.innerHTML = type;
 			obj.elem.style.backgroundSize = objViewSize + 'px ' + objViewSize + 'px';
