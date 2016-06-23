@@ -386,19 +386,25 @@ function inherit(subclass,base,methods){
 			desc: function(tile){
 				var ret = ""
 				// Progress bar
-				if(this.recipe)
+				if(this.recipe){
 					ret += "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
 						"<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #ff00ff'></div></div>" +
-						"Expected output: " + tile.ironOre + "<br>";
-				ret += "Outputs: Ore<br>" +
-					"Time: 50<br>";
+						"Expected output: " + (tile.ironOre ? tile.ironOre : tile.copperOre) + "<br>" +
+						getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
+						"Outputs: <br>" +
+						getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
+				}
 				return ret;
 			},
 
 			frameProc: function(){
 				if(this.recipe === null){
 					if(0 < this.tile.ironOre){
-						this.recipe = {time: 80};
+						this.recipe = {time: 80, output: 'O'};
+						this.cooldown = this.recipe.time;
+					}
+					else if(0 < this.tile.copperOre){
+						this.recipe = {time: 80, output: 'Copper Ore'};
 						this.cooldown = this.recipe.time;
 					}
 				}
@@ -420,13 +426,17 @@ function inherit(subclass,base,methods){
 				this.output(dx, dy);
 			},
 			output: function(dx, dy){
-				if(0 < this.cooldown)
+				if(0 < this.cooldown || this.recipe === null)
 					return false;
-				if(this.tile.ironOre <= 0)
+				var oreType = this.recipe.output === 'O' ? 'ironOre' : 'copperOre';
+				var amount = this.tile[oreType];
+				if(!amount){
+					this.recipe = null;
 					return false; // Exhausted
-				if(newObject(dx, dy, 'O')){
+				}
+				if(newObject(dx, dy, this.recipe.output)){
 					this.cooldown = this.recipe.time;
-					this.tile.ironOre--;
+					this.tile[oreType]--;
 					return true;
 				}
 				else
@@ -445,14 +455,18 @@ function inherit(subclass,base,methods){
 		}
 		inherit(Factory, Container, {
 			desc: function(tile){
-				if(!this.recipe)
-					return "No recipe";
+				var ret;
+				if(!this.recipe){
+					ret = "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'></div>";
+					ret += "Recipe:<br>&nbsp;None<br>";
+				}
+				else{
+					// Progress bar
+					ret = "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>"
+						+ "<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #00ffff'></div></div>";
+					ret += "Recipe: " + recipeDraw(this.recipe);
+				}
 
-				// Progress bar
-				var ret = "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>"
-					+ "<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #00ffff'></div></div>";
-
-				ret += "Recipe: " + recipeDraw(this.recipe);
 				return ret + Container.prototype.desc.call(this);
 			},
 
@@ -523,15 +537,38 @@ function inherit(subclass,base,methods){
 		// Furnace
 		function Furnace(){
 			Factory.call(this);
-			this.recipe = {
-				input: {'O': 1},
-				output: {'M': 1},
-				time: 20,
-			};
 		}
 		inherit(Furnace, Factory, {
 			name: "Furnace",
 			symbol: 'F',
+
+			frameProc: function(tile){
+				// Clear inactive recipe
+				if(this.recipe && this.processing === false && (function(){
+					for(var i in this.recipe.input)
+						if(!this.inventory[i])
+							return true;
+					return false;
+				}).call(this))
+					this.recipe = null;
+				return Factory.prototype.frameProc.call(this, tile);
+			},
+
+			input: function(o){
+				if(o.type === 'O')
+					this.recipe = {
+						input: {'O': 1},
+						output: {'M': 1},
+						time: 20,
+					};
+				else if(o.type === 'Copper Ore')
+					this.recipe = {
+						input: {'Copper Ore': 1},
+						output: {'Copper Plate': 1},
+						time: 20,
+					};
+				return Factory.prototype.input.call(this, o);
+			},
 
 			draw: function(tileElem){
 				var imgElem = document.createElement('img');
@@ -790,6 +827,15 @@ function inherit(subclass,base,methods){
 				var oreElem = document.createElement('div');
 				oreElem.style.backgroundImage = 'url("img/iron.png")';
 				oreElem.style.backgroundPosition = '-' + Math.floor(tile.ironOre / 25) * 32 + 'px 0';
+				oreElem.style.position = 'absolute';
+				oreElem.style.width = tilesize + 'px';
+				oreElem.style.height = tilesize + 'px';
+				tileElem.appendChild(oreElem);
+			}
+			else if(tile.copperOre){
+				var oreElem = document.createElement('div');
+				oreElem.style.backgroundImage = 'url("img/copper.png")';
+				oreElem.style.backgroundPosition = '-' + Math.floor(tile.copperOre / 25) * 32 + 'px 0';
 				oreElem.style.position = 'absolute';
 				oreElem.style.width = tilesize + 'px';
 				oreElem.style.height = tilesize + 'px';
@@ -1129,7 +1175,8 @@ function inherit(subclass,base,methods){
 			var tile = board[selectedCoords[0] + selectedCoords[1] * size];
 			if(!tile || !tile.structure){
 				infoElem.innerHTML = 'Empty tile<br>' +
-					'Iron Ore: ' + tile.ironOre;
+					'Iron Ore: ' + tile.ironOre + '<br>' +
+					'Copper Ore: ' + tile.copperOre;
 				return;
 			}
 			infoElem.innerHTML = 'Type: ' + tile.structure.name + '<br>' +
@@ -1138,26 +1185,7 @@ function inherit(subclass,base,methods){
 
 		function generateItemImage(i, iconSize, count){
 			var img = document.createElement('img');
-			if(i === 'time')
-				img.src = 'img/time.png';
-			else if(i === 'O')
-				img.src = 'img/ore.png';
-			else if(i === 'M')
-				img.src = 'img/metal.png';
-			else if(i === 'Gear')
-				img.src = 'img/gear.png';
-			else if(i === 'Transport Belt')
-				img.src = 'img/transport.png';
-			else if(i === 'Inserter')
-				img.src = 'img/inserter-base.png';
-			else if(i === 'Chest')
-				img.src = 'img/chest.png';
-			else if(i === 'Ore Mine')
-				img.src = "img/mine.png";
-			else if(i === 'Furnace')
-				img.src = "img/furnace.png";
-			else if(i === 'Assembler')
-				img.src = "img/assembler.png";
+			img.src = getImageFile(i);
 			var size = iconSize ? 32 : objViewSize;
 			img.style.width = size + 'px';
 			img.style.height = size + 'px';
@@ -1253,10 +1281,12 @@ function inherit(subclass,base,methods){
 		}
 
 		function newblock(){
-			return {
+			var obj = {
 				structure: null,
 				ironOre: Math.max(0, (Math.random() * 200 - 100).toFixed()),
 			};
+			obj.copperOre = obj.ironOre === 0 ? Math.max(0, (Math.random() * 200 - 100).toFixed()) : 0;
+			return obj;
 		}
 
 		var serialNo = 0;
@@ -1294,20 +1324,9 @@ function inherit(subclass,base,methods){
 			if(hitCheck(obj.x, obj.y))
 				return false;
 			obj.elem = document.createElement('div');
-			if(type === 'O')
-				obj.elem.style.backgroundImage = 'url("img/ore.png")';
-			else if(type === 'M')
-				obj.elem.style.backgroundImage = 'url("img/metal.png")';
-			else if(type === 'Gear')
-				obj.elem.style.backgroundImage = 'url("img/gear.png")';
-			else if(type === 'Transport Belt')
-				obj.elem.style.backgroundImage = 'url("img/transport.png")';
-			else if(type === 'Inserter')
-				obj.elem.style.backgroundImage = 'url("img/inserter-base.png")';
-			else if(type === 'Chest')
-				obj.elem.style.backgroundImage = 'url("img/chest.png")';
-			else if(type === 'Ore Mine')
-				obj.elem.style.backgroundImage = 'url("img/mine.png")';
+			var file = getImageFile(type);
+			if(file)
+				obj.elem.style.backgroundImage = 'url("' + file + '")';
 			else
 				obj.elem.innerHTML = type;
 			obj.elem.style.backgroundSize = objViewSize + 'px ' + objViewSize + 'px';
@@ -1324,6 +1343,37 @@ function inherit(subclass,base,methods){
 			table.appendChild(obj.elem);
 			objects.push(obj);
 			return true;
+		}
+
+		function getImageFile(type){
+			switch(type){
+			case 'time':
+				return 'img/time.png';
+			case 'O':
+				return 'img/ore.png';
+			case 'M':
+				return 'img/metal.png';
+			case 'Copper Ore':
+				return 'img/copper-ore.png';
+			case 'Copper Plate':
+				return 'img/copper-plate.png';
+			case 'Gear':
+				return  'img/gear.png';
+			case 'Transport Belt':
+				return 'img/transport.png';
+			case 'Inserter':
+				return 'img/inserter-base.png';
+			case 'Chest':
+				return 'img/chest.png';
+			case 'Ore Mine':
+				return "img/mine.png";
+			case 'Furnace':
+				return "img/furnace.png";
+			case 'Assembler':
+				return "img/assembler.png";
+			default:
+				return "";
+			}
 		}
 
 		function positionObject(obj){
