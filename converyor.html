@@ -44,6 +44,22 @@
 				background-image: url("img/close.png");
 			}
 
+			.recipe-box{
+				border: 1px solid #0000ff; margin: 4px; background-color: #afafff;
+			}
+
+			.overlay{
+				position: absolute;
+				left: 0px;
+				top: 0px;
+				width: 100%;
+				height: 100%;
+				color: rgb(0,0,0);
+				font-weight: bold;
+				text-shadow: 1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+				text-align: right;
+			}
+
 			#points{
 				font-size: 25px;
 			}
@@ -61,17 +77,6 @@
 											  not supported by any browser */
 			}
 
-			table{
-				background-color: #f7c0a0;
-				border: 3px solid #7f7f7f;
-				border-collapse: collapse;
-				/* Centering */
-				margin-left: auto;
-				margin-right: auto;
-			}
-			td{background-color: #ffe0d0}
-			th{background-color: #e0c0a0}
-			td, th{padding: 2px; border: 2px solid #7f7f7f}
 		</style>
 	</head>
 	<body>
@@ -647,7 +652,7 @@ function inherit(subclass,base,methods){
 
 		function recipeDraw(recipe, onclick){
 			var ret = "";
-			ret += "<div style='border: 1px solid #0000ff; margin: 4px; background-color: #afafff'"
+			ret += "<div class='recipe-box'"
 				+ (onclick ? " onclick='" + onclick + "'" : "") + ">";
 			ret += "<span style='display: inline-block; margin: 1px'>" +
 				getHTML(generateItemImage("time", true, recipe.time), true) + "</span>";
@@ -1161,15 +1166,7 @@ function inherit(subclass,base,methods){
 				container.style.position = 'relative';
 				container.appendChild(img);
 				var overlay = document.createElement('div');
-				overlay.style.position = 'absolute';
-				overlay.style.width = size + 'px';
-				//overlay.style.height = size + 'px';
-				overlay.style.left = '0px';
-				overlay.style.top = '0px';
-				overlay.style.color = 'rgb(0,0,0)';
-				overlay.style.fontWeight = 'bold';
-				overlay.style.textShadow = '1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff';
-				overlay.style.textAlign = 'right';
+				overlay.setAttribute('class', 'overlay');
 				overlay.innerHTML = count;
 				container.appendChild(overlay);
 				return container;
