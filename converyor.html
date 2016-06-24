@@ -1234,9 +1234,12 @@ function inherit(subclass,base,methods){
 
 			inventoryElem = document.getElementById('inventory');
 			inventoryElem.ondragover = function(ev){
-				var str = ev.dataTransfer.getData("itemdata");
-				var data;
-				if(str && str !== "" && (data = JSON.parse(str)) && data.fromPlayer){
+				var ok = false;
+				for(var i = 0; i < ev.dataTransfer.types.length; i++){
+					if(ev.dataTransfer.types[i].toUpperCase() === "text".toUpperCase())
+						ok = true;
+				}
+				if(ok){
 					ev.preventDefault();
 					// Set the dropEffect to move
 					ev.dataTransfer.dropEffect = "move";
@@ -1244,7 +1247,7 @@ function inherit(subclass,base,methods){
 			}
 			inventoryElem.ondrop = function(ev){
 				ev.preventDefault();
-				var data = JSON.parse(ev.dataTransfer.getData("itemdata"));
+				var data = JSON.parse(ev.dataTransfer.getData("text"));
 				if(inventoryTarget && inventoryTarget.inventory && data.fromPlayer){
 					var fromInventory = player.inventory;
 					// The amount could be changed during dragging, so we'll query current value
@@ -1328,9 +1331,12 @@ function inherit(subclass,base,methods){
 			playerInventoryElem.style.height = '100%';
 			playerInventoryElem.style.textAlign = 'left';
 			playerInventoryElem.ondragover = function(ev){
-				var str = ev.dataTransfer.getData("itemdata");
-				var data;
-				if(str && str !== "" && (data = JSON.parse(str)) && !data.fromPlayer){
+				var ok = false;
+				for(var i = 0; i < ev.dataTransfer.types.length; i++){
+					if(ev.dataTransfer.types[i].toUpperCase() === "text".toUpperCase())
+						ok = true;
+				}
+				if(ok){
 					ev.preventDefault();
 					// Set the dropEffect to move
 					ev.dataTransfer.dropEffect = "move";
@@ -1338,7 +1344,7 @@ function inherit(subclass,base,methods){
 			}
 			playerInventoryElem.ondrop = function(ev){
 				ev.preventDefault();
-				var data = JSON.parse(ev.dataTransfer.getData("itemdata"));
+				var data = JSON.parse(ev.dataTransfer.getData("text"));
 				if(!data.fromPlayer && inventoryTarget && inventoryTarget.inventory){
 					var fromInventory = inventoryTarget.inventory;
 					// The amount could be changed during dragging, so we'll query current value
@@ -1451,7 +1457,7 @@ function inherit(subclass,base,methods){
 					console.log("dragStart");
 					ev.dataTransfer.dropEffect = 'move';
 					// Encode information to determine item to drop into a JSON
-					ev.dataTransfer.setData("itemdata", JSON.stringify(
+					ev.dataTransfer.setData("text", JSON.stringify(
 						{type: ev.target.itemName, fromPlayer: inventory === player.inventory}));
 				};
 				elem.appendChild(div);
