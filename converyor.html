@@ -62,9 +62,9 @@
 			.overlay{
 				position: absolute;
 				left: 0px;
-				top: 0px;
+				bottom: 0px;
 				width: 100%;
-				height: 100%;
+				height: auto;
 				color: rgb(0,0,0);
 				font-weight: bold;
 				text-shadow: 1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
@@ -133,6 +133,8 @@
 		var debugText;
 		var infoElem;
 		var playerElem;
+		var playerInventoryElem;
+		var playerInventoryIcons = false;
 		var miniMapSize = 150;
 		var miniMapElem;
 		var miniMapCursorElem;
@@ -1159,7 +1161,7 @@ function inherit(subclass,base,methods){
 			miniMapElem.appendChild(miniMapCursorElem);
 
 			playerElem = document.createElement('div');
-			playerElem.style.overflowY = 'scroll';
+			playerElem.style.overflow = 'visible';
 			playerElem.style.borderStyle = 'solid';
 			playerElem.style.borderWidth = '1px';
 			playerElem.style.border = '1px solid #00f';
@@ -1171,6 +1173,45 @@ function inherit(subclass,base,methods){
 			playerElem.style.height = (160) + 'px';
 			container.appendChild(playerElem);
 			playerElem.style.marginLeft = (-playerElem.getBoundingClientRect().width / 2) + 'px';
+
+			var listElem = document.createElement('img');
+			listElem.style.position = 'absolute';
+			listElem.style.left = '-35px';
+			listElem.style.top = '0px';
+			listElem.style.width = '32px';
+			listElem.style.height = '32px';
+			listElem.style.border = '1px solid #afafaf';
+			listElem.src = 'img/list.png';
+			listElem.onclick = function(){
+				playerInventoryIcons = false;
+				listElem.style.border = '1px solid #afafaf';
+				iconsElem.style.border = '';
+				updatePlayer();
+			};
+			playerElem.appendChild(listElem);
+
+			var iconsElem = document.createElement('img');
+			iconsElem.style.position = 'absolute';
+			iconsElem.style.left = '-35px';
+			iconsElem.style.top = '32px';
+			iconsElem.style.width = '32px';
+			iconsElem.style.height = '32px';
+			iconsElem.src = 'img/icons.png';
+			iconsElem.onclick = function(){
+				playerInventoryIcons = true;
+				listElem.style.border = '';
+				iconsElem.style.border = '1px solid #afafaf';
+				updatePlayer();
+			};
+			playerElem.appendChild(iconsElem);
+
+			playerInventoryElem = document.createElement('div');
+			playerInventoryElem.style.position = 'relative';
+			playerInventoryElem.style.overflowY = 'scroll';
+			playerInventoryElem.style.width = '100%';
+			playerInventoryElem.style.height = '100%';
+			playerInventoryElem.style.textAlign = 'left';
+			playerElem.appendChild(playerInventoryElem);
 
 			onSize();
 
@@ -1220,9 +1261,12 @@ function inherit(subclass,base,methods){
 			if(iconSize && count){
 				var container = document.createElement('span');
 				container.style.position = 'relative';
+				container.style.display = 'inline-block';
+				container.style.width = size + 'px';
+				container.style.height = size + 'px';
 				container.appendChild(img);
 				var overlay = document.createElement('div');
-				overlay.setAttribute('class', 'overlay');
+				overlay.setAttribute('class', 'overlay noselect');
 				overlay.innerHTML = count;
 				container.appendChild(overlay);
 				return container;
@@ -1232,17 +1276,23 @@ function inherit(subclass,base,methods){
 
 		function updatePlayer(){
 			// Clear the elements first
-			while(playerElem.firstChild)
-				playerElem.removeChild(playerElem.firstChild);
+			while(playerInventoryElem.firstChild)
+				playerInventoryElem.removeChild(playerInventoryElem.firstChild);
 
 			for(var i in player.inventory){
 				var v = player.inventory[i];
-				var div = document.createElement('div');
-				div.appendChild(generateItemImage(i));
-				var text = document.createElement('span');
-				text.innerHTML = v + ' ' + i;
-				div.appendChild(text);
-				div.style.textAlign = 'left';
+				var div;
+				if(playerInventoryIcons){
+					div = generateItemImage(i, true, v);
+				}
+				else{
+					div = document.createElement('div');
+					div.appendChild(generateItemImage(i));
+					var text = document.createElement('span');
+					text.innerHTML = v + ' ' + i;
+					div.appendChild(text);
+					div.style.textAlign = 'left';
+				}
 				if(player.selectedInventory === i)
 					div.style.backgroundColor = '#00ffff';
 				div.setAttribute('class', 'noselect');
@@ -1254,7 +1304,7 @@ function inherit(subclass,base,methods){
 						player.selectedInventory = null;
 					updatePlayer();
 				};
-				playerElem.appendChild(div);
+				playerInventoryElem.appendChild(div);
 			}
 		}
 
