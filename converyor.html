@@ -140,13 +140,13 @@
 		<hr>
 		<div style="position: relative">
 			<div id="container"></div>
-			<div id="inventory">
+			<div id="inventory" class="noselect">
 				<div id="inventoryTitle">Inventory</div>
 				<div class="closeButton" onclick="hideInventory()"></div>
 				<div id="inventoryClient">
-					<img id="inventoryList" src="img/list.png" style="position: absolute">
-					<img id="inventoryIcons" src="img/icons.png" style="position: absolute; left: 0px; top: 32px">
-					<img id="recipeSelectButton" src="img/recipe-select.png" alt="Recipe select" style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f">
+					<img id="inventoryList" draggable="false" src="img/list.png" style="position: absolute">
+					<img id="inventoryIcons" draggable="false" src="img/icons.png" style="position: absolute; left: 0px; top: 32px">
+					<img id="recipeSelectButton" draggable="false" src="img/recipe-select.png" alt="Recipe select" style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f">
 					<div id="inventoryContent"></div>
 				</div>
 			</div>
@@ -1309,6 +1309,7 @@ function inherit(subclass,base,methods){
 			listElem.style.height = '32px';
 			listElem.style.border = '1px solid #afafaf';
 			listElem.src = 'img/list.png';
+			listElem.setAttribute('draggable', 'false');
 			listElem.onclick = function(){
 				playerInventoryIcons = false;
 				listElem.style.border = '1px solid #afafaf';
@@ -1324,6 +1325,7 @@ function inherit(subclass,base,methods){
 			iconsElem.style.width = '32px';
 			iconsElem.style.height = '32px';
 			iconsElem.src = 'img/icons.png';
+			iconsElem.setAttribute('draggable', 'false');
 			iconsElem.onclick = function(){
 				playerInventoryIcons = true;
 				listElem.style.border = '';
@@ -1413,6 +1415,7 @@ function inherit(subclass,base,methods){
 			var size = iconSize ? 32 : objViewSize;
 			img.style.width = size + 'px';
 			img.style.height = size + 'px';
+			img.setAttribute('draggable', 'false');
 			if(iconSize && count){
 				var container = document.createElement('span');
 				container.style.position = 'relative';
