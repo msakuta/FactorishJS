@@ -682,31 +682,36 @@ function inherit(subclass,base,methods){
 					},
 					{
 						input: {'M': 5},
+						output: {'Steel Plate': 1},
+						time: 30,
+					},
+					{
+						input: {'M': 5},
 						output: {'Chest': 1},
 						time: 60,
 					},
 					{
-						input: {'M': 5, 'Gear': 3},
+						input: {'M': 1, 'Gear': 1, 'Circuit': 1},
 						output: {'Inserter': 1},
 						time: 100,
 					},
 					{
-						input: {'M': 5, 'Copper Plate': 5, 'Gear': 10},
+						input: {'M': 10, 'Gear': 5, 'Circuit': 3},
 						output: {'Ore Mine': 1},
 						time: 100,
 					},
 					{
 						input: {'Copper Plate': 1},
-						output: {'Copper Wire': 1},
+						output: {'Copper Wire': 2},
 						time: 20,
 					},
 					{
-						input: {'M': 1, 'Copper Wire': 1},
+						input: {'M': 1, 'Copper Wire': 3},
 						output: {'Circuit': 1},
 						time: 20,
 					},
 					{
-						input: {'M': 10, 'Copper Plate': 5, 'Circuit': 10},
+						input: {'M': 5, 'Gear': 5, 'Circuit': 3},
 						output: {'Assembler': 1},
 						time: 120,
 					},
@@ -1527,8 +1532,6 @@ function inherit(subclass,base,methods){
 			createElements();
 
 			// Initial inventory of player
-			player.inventory['O'] = 50;
-			player.inventory['M'] = 10;
 			player.inventory['Transport Belt'] = 20;
 			player.inventory['Inserter'] = 10;
 			player.inventory['Chest'] = 10;
@@ -1611,6 +1614,8 @@ function inherit(subclass,base,methods){
 				return 'img/ore.png';
 			case 'M':
 				return 'img/metal.png';
+			case 'Steel Plate':
+				return 'img/steel-plate.png';
 			case 'Copper Ore':
 				return 'img/copper-ore.png';
 			case 'Copper Plate':
