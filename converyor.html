@@ -198,7 +198,9 @@
 		var toolCursorElem;
 
 		// Placeholder object for player
-		var player = {inventory: {}, selectedInventory: null};
+		var player = {inventory: {}};
+		var selectedInventory = null;
+		var selectedInventoryItem = null;
 
 function isIE(){
 	var ua = window.navigator.userAgent;
@@ -1272,6 +1274,13 @@ function inherit(subclass,base,methods){
 			}
 			inventoryElem.style.display = 'none';
 
+			var inventoryContentElem = document.getElementById('inventoryContent');
+			inventoryContentElem.onclick = function(){
+				if(inventoryTarget && inventoryTarget.inventory && selectedInventory && selectedInventory !== inventoryTarget.inventory){
+					moveItem(selectedInventory, inventoryTarget.inventory, selectedInventoryItem);
+				}
+			};
+
 			var inventoryListElem = document.getElementById('inventoryList');
 			inventoryListElem.style.border = '1px solid #afafaf';
 			inventoryListElem.onclick = function(){
@@ -1361,18 +1370,10 @@ function inherit(subclass,base,methods){
 				ev.preventDefault();
 				var data = JSON.parse(ev.dataTransfer.getData(textType));
 				if(!data.fromPlayer && inventoryTarget && inventoryTarget.inventory){
-					var fromInventory = inventoryTarget.inventory;
-					// The amount could be changed during dragging, so we'll query current value
-					// from the source inventory.
-					if(data.type in player.inventory)
-						player.inventory[data.type] += fromInventory[data.type];
-					else
-						player.inventory[data.type] = fromInventory[data.type];
-					updatePlayer();
-					delete fromInventory[data.type];
-					updateInventory();
+					moveItem(inventoryTarget.inventory, player.inventory, data.type);
 				}
 			}
+			playerInventoryElem.onclick = function(){onInventoryClick(player.inventory)};
 			playerElem.appendChild(playerInventoryElem);
 
 			onSize();
@@ -1438,6 +1439,15 @@ function inherit(subclass,base,methods){
 		}
 
 		function updateInventoryInt(elem, inventory, icons){
+			// Local function to update DOM elements based on selection
+			function updateInventorySelection(elem, inventory){
+				for(var i = 0; i < elem.children.length; i++){
+					var celem = elem.children[i];
+					celem.style.backgroundColor = inventory === selectedInventory &&
+						celem.itemName === selectedInventoryItem ? "#00ffff" : "";
+				}
+			}
+
 			// Clear the elements first
 			while(elem.firstChild)
 				elem.removeChild(elem.firstChild);
@@ -1456,17 +1466,23 @@ function inherit(subclass,base,methods){
 					div.appendChild(text);
 					div.style.textAlign = 'left';
 				}
-				if(player.selectedInventory === i)
+				if(selectedInventory === inventory && selectedInventoryItem === i)
 					div.style.backgroundColor = '#00ffff';
 				div.setAttribute('class', 'noselect');
 				div.itemName = i;
 				div.itemAmount = v;
 				div.onclick = function(){
-					if(player.selectedInventory !== this.itemName)
-						player.selectedInventory = this.itemName;
-					else
-						player.selectedInventory = null;
-					updatePlayer();
+					if(selectedInventory !== inventory || selectedInventoryItem !== this.itemName){
+						selectedInventory = inventory;
+						selectedInventoryItem = this.itemName;
+					}
+					else{
+						selectedInventory = null;
+						selectedInventoryItem = null;
+					}
+					updateInventorySelection(playerInventoryElem, player.inventory);
+					if(inventoryTarget && inventoryTarget.inventory)
+						updateInventorySelection(document.getElementById('inventoryContent'), inventoryTarget.inventory);
 				};
 				div.setAttribute('draggable', 'true');
 				div.ondragstart = function(ev){
@@ -1490,6 +1506,28 @@ function inherit(subclass,base,methods){
 			if(inventoryTarget && inventoryTarget.inventory){
 				updateInventoryInt(document.getElementById('inventoryContent'), inventoryTarget.inventory, inventoryIcons);
 			}
+		}
+
+		function onInventoryClick(inventory){
+			// Update only if the selected inventory is the other one from destination.
+			if(selectedInventory && inventory !== selectedInventory){
+				moveItem(selectedInventory, inventory, selectedInventoryItem);
+			}
+		}
+
+		function moveItem(srcInventory, destInventory, type){
+			if(!(type in srcInventory))
+				return;
+			// The amount could be changed during dragging, so we'll query current value
+			// from the source inventory.
+			if(type in destInventory)
+				destInventory[type] += srcInventory[type];
+			else
+				destInventory[type] = srcInventory[type];
+			delete srcInventory[type];
+			// We'd better update both inventory windows.
+			updatePlayer();
+			updateInventory();
 		}
 
 		function selectTile(sel){
