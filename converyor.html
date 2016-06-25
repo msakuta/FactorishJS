@@ -471,7 +471,7 @@ function inherit(subclass,base,methods){
 			frameProc: function(){
 				if(this.recipe === null){
 					if(0 < this.tile.ironOre){
-						this.recipe = {time: 80, output: 'O'};
+						this.recipe = {time: 80, output: 'Iron Ore'};
 						this.cooldown = this.recipe.time;
 					}
 					else if(0 < this.tile.copperOre){
@@ -499,7 +499,7 @@ function inherit(subclass,base,methods){
 			output: function(dx, dy){
 				if(0 < this.cooldown || this.recipe === null)
 					return false;
-				var oreType = this.recipe.output === 'O' ? 'ironOre' : 'copperOre';
+				var oreType = this.recipe.output === 'Iron Ore' ? 'ironOre' : 'copperOre';
 				var amount = this.tile[oreType];
 				if(!amount){
 					this.recipe = null;
@@ -626,10 +626,10 @@ function inherit(subclass,base,methods){
 			},
 
 			input: function(o){
-				if(o.type === 'O')
+				if(o.type === 'Iron Ore')
 					this.recipe = {
-						input: {'O': 1},
-						output: {'M': 1},
+						input: {'Iron Ore': 1},
+						output: {'Iron Plate': 1},
 						time: 20,
 					};
 				else if(o.type === 'Copper Ore')
@@ -671,32 +671,32 @@ function inherit(subclass,base,methods){
 			recipes: function(){
 				return [
 					{
-						input: {'M': 1},
+						input: {'Iron Plate': 1},
 						output: {'Gear': 1},
 						time: 20,
 					},
 					{
-						input: {'M': 1, 'Gear': 1},
+						input: {'Iron Plate': 1, 'Gear': 1},
 						output: {'Transport Belt': 1},
 						time: 20,
 					},
 					{
-						input: {'M': 5},
+						input: {'Iron Plate': 5},
 						output: {'Steel Plate': 1},
 						time: 30,
 					},
 					{
-						input: {'M': 5},
+						input: {'Iron Plate': 5},
 						output: {'Chest': 1},
 						time: 60,
 					},
 					{
-						input: {'M': 1, 'Gear': 1, 'Circuit': 1},
+						input: {'Iron Plate': 1, 'Gear': 1, 'Circuit': 1},
 						output: {'Inserter': 1},
 						time: 100,
 					},
 					{
-						input: {'M': 10, 'Gear': 5, 'Circuit': 3},
+						input: {'Iron Plate': 10, 'Gear': 5, 'Circuit': 3},
 						output: {'Ore Mine': 1},
 						time: 100,
 					},
@@ -706,12 +706,12 @@ function inherit(subclass,base,methods){
 						time: 20,
 					},
 					{
-						input: {'M': 1, 'Copper Wire': 3},
+						input: {'Iron Plate': 1, 'Copper Wire': 3},
 						output: {'Circuit': 1},
 						time: 20,
 					},
 					{
-						input: {'M': 5, 'Gear': 5, 'Circuit': 3},
+						input: {'Iron Plate': 5, 'Gear': 5, 'Circuit': 3},
 						output: {'Assembler': 1},
 						time: 120,
 					},
@@ -1610,9 +1610,9 @@ function inherit(subclass,base,methods){
 			switch(type){
 			case 'time':
 				return 'img/time.png';
-			case 'O':
+			case 'Iron Ore':
 				return 'img/ore.png';
-			case 'M':
+			case 'Iron Plate':
 				return 'img/metal.png';
 			case 'Steel Plate':
 				return 'img/steel-plate.png';
