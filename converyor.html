@@ -434,11 +434,13 @@ function inherit(subclass,base,methods){
 
 		// Ore Mine
 		function OreMine(){
-			Structure.call(this);
+			Container.call(this);
 			this.cooldown = 0;
 			this.recipe = null;
+			this.power = 0;
+			this.maxPower = 0;
 		}
-		inherit(OreMine, Structure, {
+		inherit(OreMine, Container, {
 			name: "Ore Mine",
 			symbol: ["&lt;<br>Mi", "^<br>Mi", "&gt;<br>Mi", "V<br>Mi"],
 
@@ -460,8 +462,11 @@ function inherit(subclass,base,methods){
 				var ret = ""
 				// Progress bar
 				if(this.recipe){
-					ret += "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
+					ret += "Progress: " + ((this.recipe.time - this.cooldown) / this.recipe.time * 100).toFixed(0) + "%<br>" +
+						"<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
 						"<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #ff00ff'></div></div>" +
+						"Power: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
+						"<div style='position: absolute; width: " + (this.maxPower ? (this.power) / this.maxPower * 100 : 0) + "px; height: 10px; background-color: #ff00ff'></div></div>" +
 						"Expected output: " + (tile.ironOre ? tile.ironOre : tile.copperOre ? tile.copperOre : tile.coalOre) + "<br>" +
 						getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
 						"Outputs: <br>" +
@@ -473,22 +478,42 @@ function inherit(subclass,base,methods){
 			frameProc: function(){
 				if(this.recipe === null){
 					if(0 < this.tile.ironOre){
-						this.recipe = {time: 80, output: 'Iron Ore'};
+						this.recipe = {time: 80, powerCost: 0.1, output: 'Iron Ore'};
 						this.cooldown = this.recipe.time;
 					}
 					else if(0 < this.tile.copperOre){
-						this.recipe = {time: 80, output: 'Copper Ore'};
+						this.recipe = { time: 80, powerCost: 0.1, output: 'Copper Ore' };
 						this.cooldown = this.recipe.time;
 					}
-					else if (0 < this.tile.coalOre) {
-						this.recipe = { time: 80, output: 'Coal Ore' };
+					else if (0 < this.tile.coalOre){
+						this.recipe = { time: 80, powerCost: 0.1, output: 'Coal Ore' };
 						this.cooldown = this.recipe.time;
 					}
-			}
-				if(this.cooldown < 1)
-					this.cooldown = 0;
-				else
-					this.cooldown--;
+				}
+
+				if(this.recipe){
+					// First, check if we need to refill the energy buffer in order to continue the current work.
+					if("Coal Ore" in this.inventory){
+						var coalPower = 100;
+						// Refill the energy from the fuel
+						if(this.power < this.recipe.powerCost){
+							this.power += coalPower;
+							this.maxPower = this.power;
+							this.inventory["Coal Ore"]--;
+							if(this.inventory["Coal Ore"] === 0)
+								delete this.inventory["Coal Ore"];
+						}
+					}
+
+					// Proceed only if we have sufficient energy in the buffer.
+					var progress = Math.min(this.power / this.recipe.powerCost, 1);
+					if(this.cooldown < progress)
+						this.cooldown = 0;
+					else{
+						this.cooldown -= progress;
+						this.power -= progress * this.recipe.powerCost;
+					}
+				}
 
 				var idx = board.indexOf(this.tile);
 				var tx = idx % size;
@@ -502,8 +527,16 @@ function inherit(subclass,base,methods){
 				// Ore mine can output minerals without inserters
 				this.output(dx, dy);
 			},
+
+			input: function(o){
+				if(o.type === 'Coal Ore')
+					return Container.prototype.input.call(this, o);
+				else
+					return false;
+			},
+
 			output: function(dx, dy){
-				if(0 < this.cooldown || this.recipe === null)
+				if(0 < this.cooldown || this.recipe === null || this.power < this.recipe.powerCost)
 					return false;
 				var oreType = this.recipe.output === 'Iron Ore' ? 'ironOre' : this.recipe.output === 'Copper Ore' ? 'copperOre' : 'coalOre';
 				var amount = this.tile[oreType];
@@ -1590,6 +1623,7 @@ function inherit(subclass,base,methods){
 			player.inventory['Ore Mine'] = 5;
 			player.inventory['Furnace'] = 3;
 			player.inventory['Assembler'] = 3;
+			player.inventory['Coal Ore'] = 20;
 			updatePlayer();
 		}
 
