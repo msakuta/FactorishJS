@@ -605,18 +605,24 @@ function inherit(subclass,base,methods){
 			this.consumeCooldown = 0;
 			this.recipe = null;
 			this.processing = false;
+			this.power = 0;
+			this.maxPower = 0;
 		}
 		inherit(Factory, Container, {
 			desc: function(tile){
 				var ret;
+				var powerStr = this.isBurner() && this.power !== undefined ? "Power: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
+						"<div style='position: absolute; width: " + (this.maxPower ? (this.power) / this.maxPower * 100 : 0) + "px; height: 10px; background-color: #ff00ff'></div></div>" : "";
 				if(!this.recipe){
 					ret = "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'></div>";
+					ret += powerStr;
 					ret += "Recipe:<br>&nbsp;None<br>";
 				}
 				else{
 					// Progress bar
-					ret = "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>"
-						+ "<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #00ffff'></div></div>";
+					ret = "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
+						"<div style='position: absolute; width: " + (this.recipe.time - this.cooldown) / this.recipe.time * 100 + "px; height: 10px; background-color: #00ffff'></div></div>";
+					ret += powerStr;
 					ret += "Recipe: " + recipeDraw(this.recipe);
 				}
 
@@ -625,8 +631,25 @@ function inherit(subclass,base,methods){
 
 			frameProc: function(tile){
 				if(this.recipe){
+					// If the recipe requires power to process..
+					if(this.isBurner() && this.recipe.powerCost){
+						// First, check if we need to refill the energy buffer in order to continue the current work.
+						if("Coal Ore" in this.inventory){
+							var coalPower = 100;
+							// Refill the energy from the fuel
+							if(this.power < this.recipe.powerCost){
+								this.power += coalPower;
+								this.maxPower = this.power;
+								this.removeItem("Coal Ore");
+							}
+						}
+					}
+
 					if(this.processing){
-						if(this.cooldown < 1){
+						// Proceed only if we have sufficient energy in the buffer.
+						var progress = this.isBurner() && this.power !== undefined && this.recipe.powerCost !== undefined ? Math.min(this.power / this.recipe.powerCost, 1) : 1;
+
+						if(this.cooldown < progress){
 							this.processing = false;
 							this.cooldown = 0;
 							for(var k in this.recipe.output){
@@ -635,8 +658,11 @@ function inherit(subclass,base,methods){
 									updateInventory();
 							}
 						}
-						else
-							this.cooldown--;
+						else{
+							this.cooldown -= progress;
+							if(this.power !== undefined && this.recipe.powerCost !== undefined)
+								this.power -= progress * this.recipe.powerCost;
+						}
 					}
 					else{
 						var good = true;
@@ -664,6 +690,8 @@ function inherit(subclass,base,methods){
 			},
 
 			input: function(o){
+				if(this.isBurner() && o.type === "Coal Ore" && !this.inventory["Coal Ore"])
+					return Container.prototype.input.call(this, o);
 				if(!this.recipe)
 					return false;
 				if(!(o.type in this.recipe.input))
@@ -677,6 +705,8 @@ function inherit(subclass,base,methods){
 				for(var k in this.inventory){
 					if(this.recipe && this.recipe.input[k])
 						continue;
+					if(this.isBurner() && k === "Coal Ore") // Do not spit fuel if this factory needs one
+						continue;
 					if(newObject(dx, dy, k)){
 						if(--this.inventory[k] === 0)
 							delete this.inventory[k];
@@ -684,7 +714,10 @@ function inherit(subclass,base,methods){
 					}
 				}
 				return false;
-			}
+			},
+
+			/// Burner factories consume combustible materials to gain power to process the recipe.
+			isBurner: function(){return false;}
 		});
 
 		// Furnace
@@ -712,12 +745,14 @@ function inherit(subclass,base,methods){
 					this.recipe = {
 						input: {'Iron Ore': 1},
 						output: {'Iron Plate': 1},
+						powerCost: 0.5,
 						time: 20,
 					};
 				else if(o.type === 'Copper Ore')
 					this.recipe = {
 						input: {'Copper Ore': 1},
 						output: {'Copper Plate': 1},
+						powerCost: 0.5,
 						time: 20,
 					};
 				return Factory.prototype.input.call(this, o);
@@ -731,6 +766,8 @@ function inherit(subclass,base,methods){
 				imgElem.style.position = 'absolute';
 				tileElem.appendChild(imgElem);
 			},
+
+			isBurner: function(){return true;}
 		});
 
 		// Assembler
