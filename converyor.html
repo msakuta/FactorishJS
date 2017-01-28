@@ -870,8 +870,10 @@ function inherit(subclass,base,methods){
 			}
 			else if(selectedCoords !== null){
 				var tile = board[selectedCoords[0] + selectedCoords[1] * size];
-				tile.rotation = (tile.rotation + 1) % 4;
-				updateTile(tile);
+				if(tile.structure){
+					tile.structure.rotation = (tile.structure.rotation + 1) % 4;
+					updateTile(tile);
+				}
 			}
 		}
 
