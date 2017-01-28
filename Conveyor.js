@@ -781,6 +781,7 @@ function recipeSelectClick(i){
 	var recipeSelector = document.getElementById('recipeSelector');
 	recipeSelector.style.display = "none";
 }
+this.recipeSelectClick = recipeSelectClick;
 
 function showInventory(tile){
 	var inventoryContent = document.getElementById('inventoryContent');
@@ -819,7 +820,7 @@ function showRecipeSelect(tile){
 		var text = "";
 		var recipes = tile.structure.recipes();
 		for(var i = 0; i < recipes.length; i++)
-			text += recipeDraw(recipes[i], "recipeSelectClick(" + i + ")");
+			text += recipeDraw(recipes[i], "Conveyor.recipeSelectClick(" + i + ")");
 		recipeSelectorContent.innerHTML = text;
 	}
 	else{
@@ -874,7 +875,11 @@ window.onload = function(){
 	var recipeSelector = document.getElementById('recipeSelector');
 	recipeSelector.style.display = "none";
 
+	viewPortWidth = 16;
+	viewPortHeight = 12;
+
 	generateBoard();
+
 
 	// Set animation update function
 	window.setInterval(function(){
@@ -1034,7 +1039,6 @@ function createElements(){
 	container.appendChild(table);
 	for(var iy = 0; iy < viewPortHeight; iy++){
 		for(var ix = 0; ix < viewPortWidth; ix++){
-			var tile = board[ix + iy * size];
 			var tileElem = document.createElement("div");
 			tileElems[ix + iy * viewPortWidth] = tileElem;
 			tileElem.innerHTML = "";
@@ -1105,8 +1109,6 @@ function createElements(){
 
 			// Disable text selection
 			tileElem.setAttribute("class", "noselect");
-
-			updateTile(tile);
 		}
 	}
 	// Set the margin after contents are initialized
@@ -1215,8 +1217,6 @@ function createElements(){
 	miniMapCursorElem = document.createElement('div');
 	miniMapCursorElem.style.backgroundColor = '#ccffff';
 	miniMapCursorElem.style.position = 'absolute';
-	miniMapCursorElem.style.width = ((viewPortWidth + 1) * miniMapSize / size - 1) + 'px';
-	miniMapCursorElem.style.height = ((viewPortHeight + 1) * miniMapSize / size - 1) + 'px';
 	miniMapCursorElem.style.border = '1px solid #000';
 	miniMapElem.appendChild(miniMapCursorElem);
 
@@ -1379,6 +1379,8 @@ function updateInfo(){
 		infoElem.innerHTML = 'Empty tile';
 		return;
 	}
+	if(size <= selectedCoords[0] && size <= selectedCoords[1])
+		return;
 	var tile = board[selectedCoords[0] + selectedCoords[1] * size];
 	if(!tile || !tile.structure){
 		infoElem.innerHTML = 'Empty tile<br>' +
@@ -1537,18 +1539,22 @@ function selectTile(sel){
 }
 
 function generateBoard(){
+	createElements();
+
 	var sizeStr = document.getElementById("sizeSelect").value;
 	size = parseInt(sizeStr);
-	viewPortWidth = 16;
-	viewPortHeight = 12;
 	board = new Array(size * size);
 
 	for(var i = 0; i < size * size; i++)
 		board[i] = newblock(i);
 
-	scrollPos = [0, 0];
-
-	createElements();
+	scrollPos[0] = Math.max(0, Math.floor((size - viewPortWidth) / 2.));
+	scrollPos[1] = Math.max(0, Math.floor((size - viewPortHeight) / 2.));
+	miniMapElem.style.width = miniMapSize + 'px';
+	miniMapElem.style.height = miniMapSize + 'px';
+	miniMapCursorElem.style.width = ((viewPortWidth + 1) * miniMapSize / size - 1) + 'px';
+	miniMapCursorElem.style.height = ((viewPortHeight + 1) * miniMapSize / size - 1) + 'px';
+	updateAllTiles();
 
 	// Initial inventory of player
 	player.inventory['Transport Belt'] = 20;
