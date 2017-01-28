@@ -863,8 +863,10 @@ function inherit(subclass,base,methods){
 		function rotate(){
 			if(0 <= currentTool){
 				currentRotation = (currentRotation + 1) % 4;
-				toolDefs[currentTool].prototype.rotation = currentRotation;
-				updateTool(currentTool);
+				for(var i = 0; i < toolDefs.length; i++){
+					toolDefs[i].prototype.rotation = currentRotation;
+					updateTool(i);
+				}
 			}
 			else if(selectedCoords !== null){
 				var tile = board[selectedCoords[0] + selectedCoords[1] * size];
