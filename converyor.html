@@ -123,6 +123,8 @@
 			}
 
 		</style>
+		<script src="xorshift.js"></script>
+		<script src="perlinNoise.js"></script>
 	</head>
 	<body>
 		<h1>Conveyor</h1>
@@ -1063,7 +1065,7 @@ function inherit(subclass,base,methods){
 			if(tile.ironOre){
 				var oreElem = document.createElement('div');
 				oreElem.style.backgroundImage = 'url("img/iron.png")';
-				oreElem.style.backgroundPosition = '-' + Math.floor(tile.ironOre / 25) * 32 + 'px 0';
+				oreElem.style.backgroundPosition = '-' + Math.min(3, Math.floor(tile.ironOre / 100)) * 32 + 'px 0';
 				oreElem.style.position = 'absolute';
 				oreElem.style.width = tilesize + 'px';
 				oreElem.style.height = tilesize + 'px';
@@ -1072,7 +1074,7 @@ function inherit(subclass,base,methods){
 			else if(tile.copperOre){
 				var oreElem = document.createElement('div');
 				oreElem.style.backgroundImage = 'url("img/copper.png")';
-				oreElem.style.backgroundPosition = '-' + Math.floor(tile.copperOre / 25) * 32 + 'px 0';
+				oreElem.style.backgroundPosition = '-' + Math.min(3, Math.floor(tile.copperOre / 100)) * 32 + 'px 0';
 				oreElem.style.position = 'absolute';
 				oreElem.style.width = tilesize + 'px';
 				oreElem.style.height = tilesize + 'px';
@@ -1081,7 +1083,7 @@ function inherit(subclass,base,methods){
 			else if (tile.coalOre) {
 				var oreElem = document.createElement('div');
 				oreElem.style.backgroundImage = 'url("img/coal.png")';
-				oreElem.style.backgroundPosition = '-' + Math.floor(tile.coalOre / 25) * 32 + 'px 0';
+				oreElem.style.backgroundPosition = '-' + Math.min(3, Math.floor(tile.coalOre / 100)) * 32 + 'px 0';
 				oreElem.style.position = 'absolute';
 				oreElem.style.width = tilesize + 'px';
 				oreElem.style.height = tilesize + 'px';
@@ -1701,7 +1703,7 @@ function inherit(subclass,base,methods){
 			board = new Array(size * size);
 
 			for(var i = 0; i < size * size; i++)
-				board[i] = newblock();
+				board[i] = newblock(i);
 
 			scrollPos = [0, 0];
 
@@ -1718,16 +1720,18 @@ function inherit(subclass,base,methods){
 			updatePlayer();
 		}
 
-		function newblock(){
+		function newblock(i){
+			var x = i % size;
+			var y = Math.floor(i / size);
 			var obj = {
 				structure: null,
 				ironOre: 0,
 				copperOre: 0,
 				coalOre: 0,
 			};
-			var iron = Math.max(0, (Math.random() * 300 - 200).toFixed())
-			var copper = Math.max(0, (Math.random() * 300 - 200).toFixed())
-			var coal = Math.max(0, (Math.random() * 300 - 200).toFixed())
+			var iron = Math.max(0, (perlin_noise_pixel(x, y, 8) * 4000 - 3000).toFixed())
+			var copper = Math.max(0, (perlin_noise_pixel(x, y, 9) * 4000 - 3000).toFixed())
+			var coal = Math.max(0, (perlin_noise_pixel(x, y, 10) * 2000 - 1500).toFixed())
 
 			// Find and pick the maximum amounts in ore candidates
 			var oreAmts = [iron, copper, coal]
