@@ -120,6 +120,10 @@ function Structure(){
 	this.tile = null;
 }
 
+Structure.prototype.desc = function(){
+	return "";
+};
+
 Structure.prototype.draw = function(tileElem){
 	if(this.symbol instanceof Array){
 		tileElem.innerHTML = this.symbol[this.rotation];
@@ -491,6 +495,9 @@ inherit(Factory, Container, {
 				// Proceed only if we have sufficient energy in the buffer.
 				var progress = this.isBurner() && this.power !== undefined && this.recipe.powerCost !== undefined ? Math.min(this.power / this.recipe.powerCost, 1) : 1;
 
+				if(this.progressCallback)
+					progress = this.progressCallback(progress);
+
 				if(this.cooldown < progress){
 					this.processing = false;
 					this.cooldown = 0;
@@ -615,10 +622,19 @@ inherit(Furnace, Factory, {
 // Assembler
 function Assembler(){
 	Factory.call(this);
+	this.electricity = 0;
+	this.maxElectricity = 0.02;
 }
 inherit(Assembler, Factory, {
 	name: "Assembler",
 	symbol: 'A',
+
+	desc: function(){
+		var str = "Electricity: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
+			"<div style='position: absolute; width: " + (this.electricity / this.maxElectricity) * 100 + "px; height: 10px; background-color: #ffff00'></div></div>";
+		str += Factory.prototype.desc.call(this);
+		return str;
+	},
 
 	draw: function(tileElem){
 		var imgElem = document.createElement('img');
@@ -627,6 +643,12 @@ inherit(Assembler, Factory, {
 		imgElem.style.top = '0px';
 		imgElem.style.position = 'absolute';
 		tileElem.appendChild(imgElem);
+	},
+
+	progressCallback: function(progress){
+		progress = Math.min(progress, this.electricity / this.maxElectricity);
+		this.electricity -= progress * this.maxElectricity;
+		return progress;
 	},
 
 	recipes: function(){
@@ -680,6 +702,242 @@ inherit(Assembler, Factory, {
 	},
 });
 
+function FluidBox(inputEnable, outputEnable, filter, connectTo){
+	this.type = '';
+	this.amount = 0;
+	this.maxAmount = 10;
+	this.inputEnable = inputEnable !== undefined ? inputEnable : true;
+	this.outputEnable = outputEnable !== undefined ? outputEnable : true;
+	this.connectTo = connectTo || [0,1,2,3];
+	this.filter = filter; // permits undefined
+}
+
+FluidBox.prototype.freeCapacity = function(){
+	return this.maxAmount - this.amount;
+}
+
+function FluidContainer(){
+	Structure.call(this);
+	this.fluidBox = [new FluidBox()];
+}
+inherit(FluidContainer, Structure, {
+	desc: function(tile){
+		var ret = '';
+		for(var n = 0; n < this.fluidBox.length; n++){
+			var fluidBox = this.fluidBox[n];
+			ret += (fluidBox.type ? fluidBox.type : "Fluid") + " amount: " + fluidBox.amount.toFixed(1) + "/" + fluidBox.maxAmount.toFixed(1) + '<br>';
+		}
+		return ret + Structure.prototype.desc.call(this);
+	},
+
+	frameProc: function(){
+		var idx = board.indexOf(this.tile);
+		if(idx < 0)
+			return;
+		var thisPos = [idx % size, Math.floor(idx / size)];
+		var relDir = [[-1,0], [0,-1], [1,0], [0,1]];
+		for(var n = 0; n < this.fluidBox.length; n++){
+			var thisFluidBox = this.fluidBox[n];
+			// In an unlikely event, a fluid box without either input or output ports has nothing to do
+			if(thisFluidBox.amount === 0 || !thisFluidBox.inputEnable && !thisFluidBox.outputEnable)
+				continue;
+			for(var i = 0; i < thisFluidBox.connectTo.length; i++){
+				var thisRelDir = (thisFluidBox.connectTo[i] + this.rotation) % 4;
+				var pos = [thisPos[0] + relDir[thisRelDir][0], thisPos[1] + relDir[thisRelDir][1]];
+				if(pos[0] < 0 || size <= pos[0] || pos[1] < 0 || size <= pos[1])
+					continue;
+				var nextTile = board[pos[0] + pos[1] * size];
+				if(!nextTile.structure || !(nextTile.structure instanceof FluidContainer))
+					continue;
+				var nextStruct = nextTile.structure;
+				for(var j = 0; j < nextStruct.fluidBox.length; j++){
+					var nextFluidBox = nextStruct.fluidBox[j];
+					// Different types of fluids won't mix
+					if(!nextFluidBox || !(nextFluidBox instanceof FluidBox) ||
+						0 < nextFluidBox.amount && nextFluidBox.type !== thisFluidBox.type)
+						continue;
+					var pressure = nextFluidBox.amount - thisFluidBox.amount;
+					var flow = pressure * 0.01;
+					// Check input/output valve state
+					if(flow < 0 ? !thisFluidBox.outputEnable || !nextFluidBox.inputEnable || nextFluidBox.filter && nextFluidBox.filter !== thisFluidBox.type:
+						!thisFluidBox.inputEnable || !nextFluidBox.outputEnable && thisFluidBox.filter !== nextFluidBox.type)
+						continue;
+					nextFluidBox.amount -= flow;
+					thisFluidBox.amount += flow;
+					nextFluidBox.type = thisFluidBox.type;
+				}
+			}
+		}
+	}
+})
+
+function WaterWell(){
+	FluidContainer.call(this);
+}
+inherit(WaterWell, FluidContainer, {
+	name: "Water Well",
+	symbol: 'W',
+
+	draw: function(tileElem){
+		var imgElem = document.createElement('img');
+		imgElem.src = 'img/waterwell.png';
+		imgElem.style.left = '0px';
+		imgElem.style.top = '0px';
+		imgElem.style.position = 'absolute';
+		tileElem.appendChild(imgElem);
+	},
+
+	frameProc: function(){
+		var delta = 0.01;
+		// If the well has fluid other than water, clear it
+		if(this.fluidBox[0].type !== 'Water'){
+			this.fluidBox[0].type = 'Water';
+			this.fluidBox[0].amount = 0;
+		}
+		this.fluidBox[0].amount = Math.min(this.fluidBox[0].maxAmount, this.fluidBox[0].amount + 0.01);
+		FluidContainer.prototype.frameProc.call(this);
+	}
+})
+
+function Boiler(){
+	FluidContainer.call(this);
+	this.fluidBox = [
+		new FluidBox(true, false, "Water"),
+		new FluidBox(false, true)  // Additional fluid box for steam output
+	];
+	this.inventory = {};
+	this.power = 0;
+	this.maxPower = 0;
+}
+inherit(Boiler, FluidContainer, {
+	name: "Boiler",
+	symbol: 'B',
+})
+mixin(Boiler.prototype, Factory.prototype);
+
+Boiler.prototype.desc = function(){
+	var str = FluidContainer.prototype.desc.call(this);
+	str += '<br>' + Factory.prototype.desc.call(this);
+	return str;
+}
+
+Boiler.prototype.draw = function(tileElem){
+	var imgElem = document.createElement('img');
+	imgElem.src = 'img/boiler.png';
+	imgElem.style.left = '0px';
+	imgElem.style.top = '0px';
+	imgElem.style.position = 'absolute';
+	tileElem.appendChild(imgElem);
+};
+
+Boiler.prototype.frameProc = function(tile){
+	this.recipe = {
+		input: {},
+		output: {},
+		powerCost: 0.1,
+		time: 20,
+	};
+	FluidContainer.prototype.frameProc.call(this, tile);
+	Factory.prototype.frameProc.call(this, tile);
+}
+
+Boiler.prototype.isBurner = function(){return true;}
+
+Boiler.prototype.inventoryCapacity = function(){
+	return 1;
+}
+
+Boiler.prototype.progressCallback = function(progress){
+	var fluidPerProgess = 0.1;
+	progress = Math.min(this.fluidBox[1].freeCapacity() / fluidPerProgess, Math.min(this.fluidBox[0].amount / fluidPerProgess, progress));
+	this.fluidBox[0].amount -= progress * fluidPerProgess;
+	this.fluidBox[1].type = "Steam";
+	this.fluidBox[1].amount += progress * fluidPerProgess;
+	return progress;
+}
+
+function Pipe(){
+	FluidContainer.call(this);
+	this.amount = 0;
+}
+inherit(Pipe, FluidContainer, {
+	name: "Pipe",
+	symbol: 'B',
+
+	draw: function(tileElem){
+		var imgElem = document.createElement('img');
+		imgElem.src = 'img/pipe.png';
+		imgElem.style.left = '0px';
+		imgElem.style.top = '0px';
+		imgElem.style.width = '32px';
+		imgElem.style.height = '32px';
+		imgElem.style.position = 'absolute';
+		tileElem.appendChild(imgElem);
+	},
+
+	frameProc: function(){
+		FluidContainer.prototype.frameProc.call(this);
+	}
+})
+
+function SteamEngine(){
+	FluidContainer.call(this);
+	this.power = 0;
+	this.maxPower = 100;
+	this.fluidBox[0].filter = 'Steam';
+}
+inherit(SteamEngine, FluidContainer, {
+	name: "SteamEngine",
+	symbol: 'E',
+
+	desc: function(){
+		var str = FluidContainer.prototype.desc.call(this);
+		var powerStr = "Power: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
+				"<div style='position: absolute; width: " + (this.maxPower ? (this.power) / this.maxPower * 100 : 0) + "px; height: 10px; background-color: #ff00ff'></div></div>";
+		return str + powerStr;
+	},
+
+	draw: function(tileElem){
+		var imgElem = document.createElement('img');
+		imgElem.src = 'img/steam-engine.png';
+		imgElem.style.left = '0px';
+		imgElem.style.top = '0px';
+		imgElem.style.position = 'absolute';
+		tileElem.appendChild(imgElem);
+	},
+
+	frameProc: function(tile){
+		FluidContainer.prototype.frameProc.call(this, tile);
+		if(this.fluidBox[0].type === 'Steam' && 0 < this.fluidBox[0].amount){
+			var spendingSpeed = 0.1;
+			var powerPerSteam = 1.;
+			var spent = Math.min(this.fluidBox[0].amount, Math.min((this.maxPower - this.power) / powerPerSteam, spendingSpeed));
+			this.power += spent * powerPerSteam;
+			this.fluidBox[0].amount -= spent;
+		}
+
+		// If this engine has power in the buffer (capacitor)
+		if(0 < this.power){
+			var pdrange = 3; // Power distribution range
+
+			var idx = board.indexOf(this.tile);
+			if(idx < 0)
+				return;
+			var thisPos = [idx % size, Math.floor(idx / size)];
+
+			for(var y = Math.max(0, thisPos[1] - pdrange); y <= Math.min(size-1, thisPos[1] + pdrange); y++)
+			for(var x = Math.max(0, thisPos[0] - pdrange); x <= Math.min(size-1, thisPos[0] + pdrange); x++){
+				var tile = board[x + y * size];
+				if(tile.structure && tile.structure.maxElectricity){
+					var distributed = Math.min(this.maxPower, tile.structure.maxElectricity - tile.structure.electricity);
+					tile.structure.electricity += distributed;
+					this.power -= distributed;
+				}
+			}
+		}
+	},
+})
+
 var toolDefs = [
 	TransportBelt,
 	Inserter,
@@ -687,6 +945,10 @@ var toolDefs = [
 	OreMine,
 	Furnace,
 	Assembler,
+	WaterWell,
+	Boiler,
+	Pipe,
+	SteamEngine,
 ];
 
 var currentTool = -1;
@@ -1564,6 +1826,10 @@ function generateBoard(){
 	player.inventory['Furnace'] = 3;
 	player.inventory['Assembler'] = 3;
 	player.inventory['Coal Ore'] = 20;
+	player.inventory['Water Well'] = 3;
+	player.inventory['Boiler'] = 3;
+	player.inventory['SteamEngine'] = 3;
+	player.inventory['Pipe'] = 10;
 	updatePlayer();
 }
 this.generateBoard = generateBoard;
@@ -1687,6 +1953,14 @@ function getImageFile(type){
 		return "img/furnace.png";
 	case 'Assembler':
 		return "img/assembler.png";
+	case 'Water Well':
+		return "img/waterwell.png";
+	case 'Boiler':
+		return "img/boiler.png";
+	case 'Pipe':
+		return "img/pipe.png";
+	case 'SteamEngine':
+		return "img/steam-engine.png";
 	default:
 		return "";
 	}
