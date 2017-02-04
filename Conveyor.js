@@ -150,6 +150,14 @@ Structure.prototype.movable = function(){
 Structure.prototype.input = function(){return false};
 Structure.prototype.output = function(){return false};
 
+/// @brief returns connection bitfield which can influence the appearance from this structure.
+///
+/// When the structure is placed or removed, adjacent structures indicated with this function will
+/// also be updated.
+///
+/// @returns Available connections to adjacent cells in a bitfield, 0 - left, 1 - top, 2 - right, 3 - bottom.
+Structure.prototype.connection = function(){return 0};
+
 // Transport belt
 function TransportBelt(){}
 inherit(TransportBelt, Structure, {
@@ -768,7 +776,31 @@ inherit(FluidContainer, Structure, {
 				}
 			}
 		}
-	}
+	},
+
+	connection: function(){
+		function hasFluidBox(x,y){
+			if(x < 0 || size <= x || y < 0 || size <= y)
+				return null;
+			var tile = tileAt(x, y);
+			if(tile.structure && tile.structure.fluidBox)
+				return tile.structure;
+			return null;
+		}
+
+		// Fluid containers connect to other containers
+		var xy = coordOfTile(this.tile);
+		if(!xy)
+			return 0;
+		var x = xy[0];
+		var y = xy[1];
+		var l = !!hasFluidBox(x - 1, y);
+		var t = !!hasFluidBox(x, y - 1);
+		var r = !!hasFluidBox(x + 1, y);
+		var b = !!hasFluidBox(x, y + 1);
+		return l | (t << 1) | (r << 2) | (b << 3);
+	},
+
 })
 
 function WaterWell(){
@@ -856,6 +888,9 @@ Boiler.prototype.progressCallback = function(progress){
 	return progress;
 }
 
+// FluidContainer.connection is overridden by Structure.connection, which we do not want to happen.
+Boiler.prototype.connection = FluidContainer.prototype.connection;
+
 function Pipe(){
 	FluidContainer.call(this);
 	this.amount = 0;
@@ -865,8 +900,15 @@ inherit(Pipe, FluidContainer, {
 	symbol: 'B',
 
 	draw: function(tileElem){
-		var imgElem = document.createElement('img');
-		imgElem.src = 'img/pipe.png';
+		var imgElem = document.createElement('div');
+		imgElem.style.backgroundImage = 'url(img/pipe.png)';
+		if(this.tile){
+			var value = this.connection();
+			imgElem.style.backgroundPosition = -(value % 4 * 32) + 'px ' + -(Math.floor(value / 4) * 32) + 'px';
+		}
+		else
+			imgElem.style.backgroundPosition = '96px 96px';
+		// imgElem.style.transform = 'rotate(' + (this.rotation * 90 + 180) + 'deg)';
 		imgElem.style.left = '0px';
 		imgElem.style.top = '0px';
 		imgElem.style.width = '32px';
@@ -955,6 +997,23 @@ var currentTool = -1;
 var currentRotation = 0;
 
 var objects = [];
+
+function coordOfTile(tile){
+	var idx = board.indexOf(tile);
+	if(0 <= idx)
+		return [ idx % size, Math.floor(idx / size)];
+	else
+		return null;
+}
+
+function tileAt(x, y){
+	if(x instanceof Array){
+		y = x[1];
+		x = x[0];
+	}
+	return board[x + y * size];
+}
+
 
 function iterateTiles(func){
 	for(var iy = 0; iy < size; iy++){
@@ -1314,6 +1373,7 @@ function createElements(){
 				var c = idx % viewPortWidth + scrollPos[0];
 				var r = Math.floor(idx / viewPortWidth) + scrollPos[1];
 				var tile = board[c + r * size];
+				var connection = tile.structure ? tile.structure.connection() : 0;
 
 				if(e.button !== 0){
 					harvest(tile);
@@ -1350,12 +1410,22 @@ function createElements(){
 					if(--player.inventory[tool.prototype.name] === 0)
 						delete player.inventory[tool.prototype.name];
 					updatePlayer();
+					connection |= tile.structure.connection();
 				}
 				else{
 					// If mouse button is clicked without any tool selected, try to open it (WIP).
 					showInventory(tile);
 				}
 				updateTile(tile);
+				for(var i = 0; i < 4; i++){
+					if(connection & (1 << i)){
+						var x = c + [-1,0,1,0][i];
+						var y = r + [0,-1,0,1][i];
+						var tile2 = tileAt(x, y);
+						if(tile2)
+							updateTile(tile2);
+					}
+				}
 				return false;
 			}
 
@@ -1958,7 +2028,7 @@ function getImageFile(type){
 	case 'Boiler':
 		return "img/boiler.png";
 	case 'Pipe':
-		return "img/pipe.png";
+		return "img/pipe-item.png";
 	case 'SteamEngine':
 		return "img/steam-engine.png";
 	default:
