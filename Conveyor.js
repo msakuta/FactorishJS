@@ -1112,6 +1112,7 @@ function showInventory(tile){
 	}
 	else if(tile.structure && tile.structure.inventory){
 		inventoryElem.style.display = "block";
+		bringToTop(inventoryElem);
 		inventoryTarget = tile.structure;
 		var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
 		recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
@@ -1137,6 +1138,7 @@ function showRecipeSelect(tile){
 	}
 	else if(tile.structure && tile.structure.recipes){
 		recipeSelector.style.display = "block";
+		bringToTop(recipeSelector);
 		recipeTarget = tile.structure;
 		var text = "";
 		var recipes = tile.structure.recipes();
@@ -1187,6 +1189,22 @@ function onKeyDown(event){
 	}
 }
 
+/// An array of window elements which holds order of z indices.
+var windowOrder = [];
+
+/// Bring a window to the top on the other windows.
+function bringToTop(elem){
+	var oldIdx = windowOrder.indexOf(elem);
+	if(0 <= oldIdx && oldIdx < windowOrder.length - 1){
+		windowOrder.splice(oldIdx, 1);
+		windowOrder.push(elem);
+		for(var i = 0; i < windowOrder.length; i++)
+			windowOrder[i].style.zIndex = i;
+	}
+	var mousecaptorElem = document.getElementById('mousecaptor');
+	mousecaptorElem.style.zIndex = i; // The mouse capture element comes on top of all other windows
+}
+
 window.onload = function(){
 	window.addEventListener( 'keydown', onKeyDown, false );
 
@@ -1201,6 +1219,67 @@ window.onload = function(){
 
 	generateBoard();
 
+	// Shared event handler for window headers
+	function dragWindowMouseDown(evt,elem,pos){
+		pos = [evt.screenX, evt.screenY];
+		bringToTop(elem);
+		var mousecaptorElem = document.getElementById('mousecaptor');
+		mousecaptorElem.style.display = 'block';
+
+		// Dragging moves windows
+		function mousemove(evt){
+			if(!pos)
+				return;
+			var containerElem = document.getElementById('container');
+			var cr = containerElem.getBoundingClientRect();
+			var rel = [evt.screenX - pos[0], evt.screenY - pos[1]];
+			pos = [evt.screenX, evt.screenY];
+			var r = elem.getBoundingClientRect();
+			var left = elem.style.left !== '' ? parseInt(elem.style.left) : (cr.left + cr.right) / 2;
+			var top = elem.style.top !== '' ? parseInt(elem.style.top) : (cr.top + cr.bottom) / 2;
+			elem.style.left = (left + rel[0]) + 'px';
+			elem.style.top = (top + rel[1]) + 'px';
+		}
+		
+		mousecaptorElem.addEventListener('mousemove', mousemove);
+		mousecaptorElem.addEventListener('mouseup', function(evt){
+			// Stop dragging a window
+			elem = null;
+			this.removeEventListener('mousemove', mousemove);
+			this.style.display = 'none';
+		});
+	}
+
+	// Place a window element at the center of the container, assumes the windows have margin set in the middle.
+	function placeCenter(elem){
+		var containerElem = document.getElementById('container');
+		var cr = containerElem.getBoundingClientRect();
+		elem.style.left = ((cr.left + cr.right) / 2) + 'px';
+		elem.style.top = ((cr.top + cr.bottom) / 2) + 'px';
+	}
+
+	var inventoryDragStart = null;
+
+	var inventoryTitleElem = document.getElementById('inventoryTitle');
+
+	placeCenter(inventoryElem);
+	windowOrder.push(inventoryElem);
+
+	inventoryTitleElem.addEventListener('mousedown', function(evt){
+		dragWindowMouseDown(evt, inventoryElem, inventoryDragStart);
+	});
+
+	var recipeSelectorDragStart = null;
+
+	var recipeSelectorTitle = document.getElementById('recipeSelectorTitle');
+	var recipeSelector = document.getElementById('recipeSelector');
+	if(recipeSelectorTitle && recipeSelector){
+		placeCenter(recipeSelector);
+		windowOrder.push(recipeSelector);
+		recipeSelectorTitle.addEventListener('mousedown', function(evt){
+			dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart);
+		})
+	}
 
 	// Set animation update function
 	window.setInterval(function(){
