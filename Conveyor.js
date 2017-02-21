@@ -120,6 +120,10 @@ function Structure(){
 	this.tile = null;
 }
 
+Structure.prototype.toolDesc = function(){
+	return "";
+};
+
 Structure.prototype.desc = function(){
 	return "";
 };
@@ -163,6 +167,10 @@ function TransportBelt(){}
 inherit(TransportBelt, Structure, {
 	name: "Transport Belt",
 	symbol: ["&lt;", "^", "&gt;", "V"],
+
+	toolDesc: function(){
+		return 'Transports items on ground';
+	},
 
 	draw: function(tileElem){
 		var imgElem = document.createElement('div');
@@ -208,6 +216,10 @@ function Inserter(){
 inherit(Inserter, Structure, {
 	name: "Inserter",
 	symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
+
+	toolDesc: function(){
+		return 'Picks items from one side and puts on the other side<br>in the direction indicated by an arrow.<br>Costs no energy to operate.';
+	},
 
 	draw: function(tileElem){
 		var baseElem = document.createElement('img');
@@ -316,6 +328,10 @@ inherit(Chest, Container, {
 	name: "Chest",
 	symbol: 'C',
 
+	toolDesc: function(){
+		return 'Can store 100 items.<br>Use inserters to automatically store/retrieve items.';
+	},
+
 	draw: function(tileElem){
 		var imgElem = document.createElement('img');
 		imgElem.src = 'img/chest.png';
@@ -337,6 +353,10 @@ function OreMine(){
 inherit(OreMine, Container, {
 	name: "Ore Mine",
 	symbol: ["&lt;<br>Mi", "^<br>Mi", "&gt;<br>Mi", "V<br>Mi"],
+
+	toolDesc: function(){
+		return 'Mines ores and puts them to adjacent ground<br>or a structure in the direction indicated by an arrow.<br>Requires coal ores to operate.';
+	},
 
 	draw: function(tileElem){
 		var imgElem = document.createElement('img');
@@ -585,6 +605,10 @@ inherit(Furnace, Factory, {
 	name: "Furnace",
 	symbol: 'F',
 
+	toolDesc: function(){
+		return 'Smelts metal ores into metal bars.<br>Requires coal ores to operate.';
+	},
+
 	frameProc: function(tile){
 		// Clear inactive recipe
 		if(this.recipe && this.processing === false && (function(){
@@ -636,6 +660,10 @@ function Assembler(){
 inherit(Assembler, Factory, {
 	name: "Assembler",
 	symbol: 'A',
+
+	toolDesc: function(){
+		return 'Assembles items from ingredients with recipes.<br>Set a recipe in the inventory GUI to operate.<br>Requires electricity to operate.';
+	},
 
 	desc: function(){
 		var str = "Electricity: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
@@ -810,6 +838,10 @@ inherit(WaterWell, FluidContainer, {
 	name: "Water Well",
 	symbol: 'W',
 
+	toolDesc: function(){
+		return 'Pumps underground water at a fixed rate of 0.01 units per tick.';
+	},
+
 	draw: function(tileElem){
 		var imgElem = document.createElement('img');
 		imgElem.src = 'img/waterwell.png';
@@ -846,6 +878,10 @@ inherit(Boiler, FluidContainer, {
 	symbol: 'B',
 })
 mixin(Boiler.prototype, Factory.prototype);
+
+Boiler.prototype.toolDesc = function(){
+	return 'Burns coal ores and use the generated heat to convert water into steam.';
+}
 
 Boiler.prototype.desc = function(){
 	var str = FluidContainer.prototype.desc.call(this);
@@ -899,6 +935,10 @@ inherit(Pipe, FluidContainer, {
 	name: "Pipe",
 	symbol: 'B',
 
+	toolDesc: function(){
+		return 'Conveys fluid such as water or steam.';
+	},
+
 	draw: function(tileElem){
 		var imgElem = document.createElement('div');
 		imgElem.style.backgroundImage = 'url(img/pipe.png)';
@@ -931,6 +971,10 @@ function SteamEngine(){
 inherit(SteamEngine, FluidContainer, {
 	name: "SteamEngine",
 	symbol: 'E',
+
+	toolDesc: function(){
+		return 'Consumes steam and transmits electricity within a range of 3 tiles.';
+	},
 
 	desc: function(){
 		var str = FluidContainer.prototype.desc.call(this);
@@ -1205,6 +1249,8 @@ function bringToTop(elem){
 	mousecaptorElem.style.zIndex = i; // The mouse capture element comes on top of all other windows
 }
 
+var toolTip;
+
 window.onload = function(){
 	window.addEventListener( 'keydown', onKeyDown, false );
 
@@ -1213,6 +1259,15 @@ window.onload = function(){
 	// need to write the initial value from the code.
 	var recipeSelector = document.getElementById('recipeSelector');
 	recipeSelector.style.display = "none";
+
+	toolTip = document.createElement('dim');
+	toolTip.setAttribute('id', 'tooltip');
+	toolTip.setAttribute('class', 'noselect');
+	toolTip.innerHTML = 'hello there';
+	toolTip.style.zIndex = 100; // Usually comes on top of all the other elements
+	toolTip.style.display = 'none'; // Initially invisible
+	var containerElem = document.getElementById('container');
+	containerElem.appendChild(toolTip);
 
 	viewPortWidth = 16;
 	viewPortHeight = 12;
@@ -1584,6 +1639,24 @@ function createElements(){
 		toolElem.onmousedown = function(e){
 			selectTool(toolElems.indexOf(this));
 		}
+		toolElem.onmouseenter = function(e){
+			var idx = toolElems.indexOf(this);
+			if(idx < 0 || toolDefs.length <= idx)
+				return;
+			var tool = toolDefs[idx];
+			var r = this.getBoundingClientRect();
+			var cr = container.getBoundingClientRect();
+			toolTip.style.left = (r.left - cr.left) + 'px';
+			toolTip.style.top = (r.bottom - cr.top) + 'px';
+			toolTip.style.display = 'block';
+			var desc = tool.prototype.toolDesc();
+			if(0 < desc.length)
+				desc = '<br>' + desc;
+			toolTip.innerHTML = '<b>' + tool.prototype.name + '</b>' + desc;
+		};
+		toolElem.onmouseleave = function(e){
+			toolTip.style.display = 'none';
+		};
 		toolBarElem.appendChild(toolElem);
 		// Disable text selection
 		toolElem.setAttribute("class", "noselect");
