@@ -128,7 +128,10 @@ Structure.prototype.desc = function(){
 	return "";
 };
 
-Structure.prototype.draw = function(tileElem){
+/// Function to build DOM elements for graphics of this structure.
+/// Called only once on construction, so if you want to animate the graphics, use frameProc.
+/// The second argument is true only if it's about to render toolbar button.
+Structure.prototype.draw = function(tileElem, isToolBar){
 	if(this.symbol instanceof Array){
 		tileElem.innerHTML = this.symbol[this.rotation];
 	}
@@ -672,13 +675,34 @@ inherit(Assembler, Factory, {
 		return str;
 	},
 
-	draw: function(tileElem){
+	draw: function(tileElem, isToolBar){
 		var imgElem = document.createElement('img');
 		imgElem.src = 'img/assembler.png';
 		imgElem.style.left = '0px';
 		imgElem.style.top = '0px';
 		imgElem.style.position = 'absolute';
 		tileElem.appendChild(imgElem);
+
+		// Alarm icon is not necessary in toolbar icons.
+		if(!isToolBar){
+			// Build electricity alarm icon no matter whether electricity is provided or not,
+			// because the situation can change afterwards (and we want flickering animation).
+			var alarmElem = document.createElement('img');
+			alarmElem.src = 'img/electricity-alarm.png';
+			alarmElem.style.left = '0px';
+			alarmElem.style.top = '0px';
+			alarmElem.style.position = 'absolute';
+			alarmElem.style.display = 'none';
+			tileElem.appendChild(alarmElem);
+			this.alarmElem = alarmElem;
+		}
+	},
+
+	frameProc: function(){
+		var alarmElem = this.alarmElem;
+		if(alarmElem)
+			alarmElem.style.display = this.electricity !== 0 || simstep % 32 < 16 ? 'none' : 'block';
+		Factory.prototype.frameProc.call(this);
 	},
 
 	progressCallback: function(progress){
@@ -1395,7 +1419,7 @@ function updateTile(tile){
 	if(tile.structure === null)
 		/*tileElem.innerHTML = ""*/;
 	else{
-		tile.structure.draw(tileElem);
+		tile.structure.draw(tileElem, false);
 	}
 }
 
@@ -1419,7 +1443,7 @@ function updateTool(tool){
 		// Remove the children first, because old nodes may be present
 		while(toolElems[tool].firstChild)
 			toolElems[tool].removeChild(toolElems[tool].firstChild);
-		toolDefs[tool].prototype.draw.call(toolDefs[tool].prototype, toolElems[tool]);
+		toolDefs[tool].prototype.draw.call(toolDefs[tool].prototype, toolElems[tool], true);
 	}
 }
 
@@ -1660,7 +1684,7 @@ function createElements(){
 		toolBarElem.appendChild(toolElem);
 		// Disable text selection
 		toolElem.setAttribute("class", "noselect");
-		toolDefs[i].prototype.draw(toolElem);
+		toolDefs[i].prototype.draw(toolElem, true);
 	}
 	var rotateButton = document.createElement('div');
 	rotateButton.style.width = '31px';
