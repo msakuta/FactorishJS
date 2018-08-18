@@ -91,6 +91,7 @@ function mixin(target, source){
 	for(var k in source){
 		target[k] = source[k];
 	}
+	return target;
 }
 
 /// Custom inheritance function that prevents the super class's constructor
@@ -100,7 +101,7 @@ function mixin(target, source){
 /// @param base The constructor of the base class which subclass's prototype should point to.
 /// @param methods Optional argument for a table containing methods to define for subclass.
 ///                The table is mixed-in to subclass, so it won't be a base class of subclass.
-function inherit(subclass,base,methods){
+function inherit(subclass,base,methods,addMixin){
 	// If the browser or ECMAScript supports Object.create, use it
 	// (but don't remember to redirect constructor pointer to subclass)
 	if(Object.create){
@@ -113,6 +114,8 @@ function inherit(subclass,base,methods){
 	}
 	if(methods)
 		mixin(subclass.prototype, methods);
+	if(addMixin)
+		mixin(subclass.prototype, addMixin);
 	subclass.prototype.constructor = subclass;
 }
 
@@ -345,6 +348,30 @@ inherit(Chest, Container, {
 	},
 });
 
+/// A mixin class for adding common methods for all fuel-burning machines, not necessarily in a derived relationship.
+function Burner(){
+	;
+}
+
+Burner.prototype.addFuelAlarm = function(tileElem){
+	// Build electricity alarm icon no matter whether electricity is provided or not,
+	// because the situation can change afterwards (and we want flickering animation).
+	var alarmElem = document.createElement('img');
+	alarmElem.src = 'img/fuel-alarm.png';
+	alarmElem.style.left = '0px';
+	alarmElem.style.top = '0px';
+	alarmElem.style.position = 'absolute';
+	alarmElem.style.display = 'none';
+	tileElem.appendChild(alarmElem);
+	this.alarmElem = alarmElem;
+}
+
+Burner.prototype.updateFuelAlarm = function(){
+	var alarmElem = this.alarmElem;
+	if(alarmElem)
+		alarmElem.style.display = this.power !== 0 || simstep % 32 < 16 ? 'none' : 'block';
+}
+
 // Ore Mine
 function OreMine(){
 	Container.call(this);
@@ -361,7 +388,7 @@ inherit(OreMine, Container, {
 		return 'Mines ores and puts them to adjacent ground<br>or a structure in the direction indicated by an arrow.<br>Requires coal ores to operate.';
 	},
 
-	draw: function(tileElem){
+	draw: function(tileElem, isToolBar){
 		var imgElem = document.createElement('img');
 		imgElem.src = 'img/mine.png';
 		imgElem.style.left = '0px';
@@ -373,6 +400,11 @@ inherit(OreMine, Container, {
 		directionElem.style.transform = 'rotate(' + (this.rotation * 90) + 'deg)';
 		directionElem.style.position = 'relative';
 		tileElem.appendChild(directionElem);
+
+		// Alarm icon is not necessary in toolbar icons.
+		if(!isToolBar){
+			this.addFuelAlarm(tileElem);
+		}
 	},
 
 	desc: function(tile){
@@ -393,6 +425,8 @@ inherit(OreMine, Container, {
 	},
 
 	frameProc: function(){
+		this.updateFuelAlarm();
+
 		if(this.recipe === null){
 			if(0 < this.tile.ironOre){
 				this.recipe = {time: 80, powerCost: 0.1, output: 'Iron Ore'};
@@ -472,7 +506,7 @@ inherit(OreMine, Container, {
 	inventoryCapacity: function(){
 		return 1;
 	}
-});
+}, Burner.prototype);
 
 // The base class for all factory classes, which produces something
 // out from ingredients
@@ -613,6 +647,7 @@ inherit(Furnace, Factory, {
 	},
 
 	frameProc: function(tile){
+		this.updateFuelAlarm();
 		// Clear inactive recipe
 		if(this.recipe && this.processing === false && (function(){
 			for(var i in this.recipe.input)
@@ -642,17 +677,20 @@ inherit(Furnace, Factory, {
 		return Factory.prototype.input.call(this, o);
 	},
 
-	draw: function(tileElem){
+	draw: function(tileElem, isToolBar){
 		var imgElem = document.createElement('img');
 		imgElem.src = 'img/furnace.png';
 		imgElem.style.left = '0px';
 		imgElem.style.top = '0px';
 		imgElem.style.position = 'absolute';
 		tileElem.appendChild(imgElem);
+		if(!isToolBar){
+			this.addFuelAlarm(tileElem);
+		}
 	},
 
 	isBurner: function(){return true;}
-});
+}, Burner.prototype);
 
 // Assembler
 function Assembler(){
@@ -900,7 +938,7 @@ function Boiler(){
 inherit(Boiler, FluidContainer, {
 	name: "Boiler",
 	symbol: 'B',
-})
+}, Burner.prototype)
 mixin(Boiler.prototype, Factory.prototype);
 
 Boiler.prototype.toolDesc = function(){
@@ -913,16 +951,20 @@ Boiler.prototype.desc = function(){
 	return str;
 }
 
-Boiler.prototype.draw = function(tileElem){
+Boiler.prototype.draw = function(tileElem, isToolBar){
 	var imgElem = document.createElement('img');
 	imgElem.src = 'img/boiler.png';
 	imgElem.style.left = '0px';
 	imgElem.style.top = '0px';
 	imgElem.style.position = 'absolute';
 	tileElem.appendChild(imgElem);
+	if(!isToolBar){
+		this.addFuelAlarm(tileElem);
+	}
 };
 
 Boiler.prototype.frameProc = function(tile){
+	this.updateFuelAlarm();
 	this.recipe = {
 		input: {},
 		output: {},
