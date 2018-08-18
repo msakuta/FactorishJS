@@ -796,6 +796,21 @@ inherit(Assembler, Factory, {
 				output: {'Assembler': 1},
 				time: 120,
 			},
+			{
+				input: {'Iron Plate': 2},
+				output: {'Pipe': 1},
+				time: 20,
+			},
+			{
+				input: {'Iron Plate': 5, 'Copper Plate': 5},
+				output: {'Boiler': 1},
+				time: 20,
+			},
+			{
+				input: {'Iron Plate': 5, 'Gear': 5, 'Copper Plate': 5},
+				output: {'SteamEngine': 1},
+				time: 20,
+			},
 		]
 	},
 });
