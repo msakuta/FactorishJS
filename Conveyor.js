@@ -844,6 +844,20 @@ inherit(FluidContainer, Structure, {
 		return ret + Structure.prototype.desc.call(this);
 	},
 
+	draw: function(tileElem, isToolBar){
+		if(!isToolBar){
+			// Build fluid amount bar element for contained fluid boxes, which can dynamically change height in frameProc.
+			var fluidAmountElem = document.createElement('div');
+			fluidAmountElem.style.backgroundColor = '#007f00';
+			fluidAmountElem.style.left = '26px';
+			fluidAmountElem.style.top = '2px';
+			fluidAmountElem.style.width = '4px';
+			fluidAmountElem.style.position = 'absolute';
+			tileElem.appendChild(fluidAmountElem);
+			this.fluidAmountElem = fluidAmountElem;
+		}
+	},
+
 	frameProc: function(){
 		var idx = board.indexOf(this.tile);
 		if(idx < 0)
@@ -871,7 +885,7 @@ inherit(FluidContainer, Structure, {
 						0 < nextFluidBox.amount && nextFluidBox.type !== thisFluidBox.type)
 						continue;
 					var pressure = nextFluidBox.amount - thisFluidBox.amount;
-					var flow = pressure * 0.01;
+					var flow = pressure * 0.1;
 					// Check input/output valve state
 					if(flow < 0 ? !thisFluidBox.outputEnable || !nextFluidBox.inputEnable || nextFluidBox.filter && nextFluidBox.filter !== thisFluidBox.type:
 						!thisFluidBox.inputEnable || !nextFluidBox.outputEnable && thisFluidBox.filter !== nextFluidBox.type)
@@ -881,6 +895,19 @@ inherit(FluidContainer, Structure, {
 					nextFluidBox.type = thisFluidBox.type;
 				}
 			}
+		}
+		if(this.fluidAmountElem && 0 < this.fluidBox.length){
+			var showFluidAmount = document.getElementById('showFluidAmount');
+			if(showFluidAmount && showFluidAmount.checked){
+				var barHeight = 26 * this.fluidBox[0].amount / this.fluidBox[0].maxAmount;
+				this.fluidAmountElem.style.display = 'block';
+				this.fluidAmountElem.style.height = barHeight + 'px';
+				this.fluidAmountElem.style.top = (28 - barHeight) + 'px';
+				// Change the bar color according to the type of the fluid.
+				this.fluidAmountElem.style.backgroundColor = this.fluidBox[0].type === 'Water' ? '#007f7f' : '#7f7f7f';
+			}
+			else
+				this.fluidAmountElem.style.display = 'none';
 		}
 	},
 
@@ -920,13 +947,14 @@ inherit(WaterWell, FluidContainer, {
 		return 'Pumps underground water at a fixed rate of 0.01 units per tick.';
 	},
 
-	draw: function(tileElem){
+	draw: function(tileElem, isToolBar){
 		var imgElem = document.createElement('img');
 		imgElem.src = 'img/waterwell.png';
 		imgElem.style.left = '0px';
 		imgElem.style.top = '0px';
 		imgElem.style.position = 'absolute';
 		tileElem.appendChild(imgElem);
+		FluidContainer.prototype.draw.call(this, tileElem, isToolBar);
 	},
 
 	frameProc: function(){
@@ -936,7 +964,7 @@ inherit(WaterWell, FluidContainer, {
 			this.fluidBox[0].type = 'Water';
 			this.fluidBox[0].amount = 0;
 		}
-		this.fluidBox[0].amount = Math.min(this.fluidBox[0].maxAmount, this.fluidBox[0].amount + 0.01);
+		this.fluidBox[0].amount = Math.min(this.fluidBox[0].maxAmount, this.fluidBox[0].amount + 0.1);
 		FluidContainer.prototype.frameProc.call(this);
 	}
 })
@@ -977,6 +1005,7 @@ Boiler.prototype.draw = function(tileElem, isToolBar){
 	if(!isToolBar){
 		this.addFuelAlarm(tileElem);
 	}
+	FluidContainer.prototype.draw.call(this, tileElem, isToolBar);
 };
 
 Boiler.prototype.frameProc = function(tile){
@@ -1021,7 +1050,7 @@ inherit(Pipe, FluidContainer, {
 		return 'Conveys fluid such as water or steam.';
 	},
 
-	draw: function(tileElem){
+	draw: function(tileElem, isToolBar){
 		var imgElem = document.createElement('div');
 		imgElem.style.backgroundImage = 'url(img/pipe.png)';
 		if(this.tile){
@@ -1037,6 +1066,7 @@ inherit(Pipe, FluidContainer, {
 		imgElem.style.height = '32px';
 		imgElem.style.position = 'absolute';
 		tileElem.appendChild(imgElem);
+		FluidContainer.prototype.draw.call(this, tileElem, isToolBar);
 	},
 
 	frameProc: function(){
@@ -1047,7 +1077,7 @@ inherit(Pipe, FluidContainer, {
 function SteamEngine(){
 	FluidContainer.call(this);
 	this.power = 0;
-	this.maxPower = 100;
+	this.maxPower = 10;
 	this.fluidBox[0].filter = 'Steam';
 }
 inherit(SteamEngine, FluidContainer, {
@@ -1065,13 +1095,14 @@ inherit(SteamEngine, FluidContainer, {
 		return str + powerStr;
 	},
 
-	draw: function(tileElem){
+	draw: function(tileElem, isToolBar){
 		var imgElem = document.createElement('img');
 		imgElem.src = 'img/steam-engine.png';
 		imgElem.style.left = '0px';
 		imgElem.style.top = '0px';
 		imgElem.style.position = 'absolute';
 		tileElem.appendChild(imgElem);
+		FluidContainer.prototype.draw.call(this, tileElem, isToolBar);
 	},
 
 	frameProc: function(tile){
