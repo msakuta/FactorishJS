@@ -20,7 +20,8 @@ var inventoryTarget = null;
 var playerElem;
 var playerInventoryElem;
 var playerInventoryIcons = false;
-var miniMapSize = 150;
+var tableMargin = 20;
+var miniMapSize = 200;
 var miniMapElem;
 var miniMapCursorElem;
 var recipeTarget = null;
@@ -1194,10 +1195,10 @@ function recipeDraw(recipe, onclick){
 		+ (onclick ? " onclick='" + onclick + "'" : "") + ">";
 	ret += "<span style='display: inline-block; margin: 1px'>" +
 		getHTML(generateItemImage("time", true, recipe.time), true) + "</span>";
-	ret += "<span style='display: inline-block; width: 30%'>";
+	ret += "<span style='display: inline-block; width: 50%'>";
 	for(var k in recipe.input)
 		ret += getHTML(generateItemImage(k, true, recipe.input[k]), true);
-	ret += "</span><img src='img/rightarrow.png' style='width: 20px; height: 32px'><span style='display: inline-block; width: 30%'>";
+	ret += "</span><img src='img/rightarrow.png' style='width: 20px; height: 32px'><span style='display: inline-block; width: 10%'>";
 	for(var k in recipe.output)
 		ret += getHTML(generateItemImage(k, true, recipe.output[k]), true);
 	ret += "</span></div>";
@@ -1659,7 +1660,7 @@ function createElements(){
 		}
 	}
 	// Set the margin after contents are initialized
-	table.style.marginLeft = (-table.getBoundingClientRect().width / 2) + 'px';
+	table.style.marginLeft = (-(table.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
 	var containerRect = container.getBoundingClientRect();
 	var tableRect = table.getBoundingClientRect();
@@ -1757,7 +1758,7 @@ function createElements(){
 	toolBarElem.appendChild(rotateButton);
 
 	// Set the margin after contents are initialized
-	toolBarElem.style.marginLeft = (-toolBarElem.getBoundingClientRect().width / 2) + 'px';
+	toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
 	selectTool(-1);
 
@@ -1853,7 +1854,7 @@ function createElements(){
 	playerElem.style.width = (320) + 'px';
 	playerElem.style.height = (160) + 'px';
 	container.appendChild(playerElem);
-	playerElem.style.marginLeft = (-playerElem.getBoundingClientRect().width / 2) + 'px';
+	playerElem.style.marginLeft = (-(playerElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
 	var listElem = document.createElement('img');
 	listElem.style.position = 'absolute';
@@ -1925,17 +1926,17 @@ function createElements(){
 function onSize(){
 	var tableRect = table.getBoundingClientRect();
 
-	miniMapElem.style.left = (tableRect.right + 20) + 'px';
+	miniMapElem.style.left = (tableRect.right + tableMargin) + 'px';
 	miniMapElem.style.top = '0px';
-	miniMapElem.style.left = (tableRect.right + 20) + 'px';
+	miniMapElem.style.left = (tableRect.right + tableMargin) + 'px';
 	var mrect = miniMapElem.getBoundingClientRect();
 	updateMiniMapPos();
 
 	var rect = infoElem.getBoundingClientRect();
-	infoElem.style.left = (tableRect.right + 20) + 'px';
-	infoElem.style.top = (mrect.height + 20) + 'px';
-	infoElem.style.width = '150px';
-	infoElem.style.height = (tableRect.height - mrect.height - 20) + 'px';
+	infoElem.style.left = (tableRect.right + tableMargin) + 'px';
+	infoElem.style.top = (mrect.height + tableMargin) + 'px';
+	infoElem.style.width = miniMapSize + 'px';
+	infoElem.style.height = (container.getBoundingClientRect().height - mrect.height - tableMargin) + 'px';
 	infoElem.style.textAlign = 'left';
 }
 
