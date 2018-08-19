@@ -855,6 +855,17 @@ inherit(FluidContainer, Structure, {
 			fluidAmountElem.style.position = 'absolute';
 			tileElem.appendChild(fluidAmountElem);
 			this.fluidAmountElem = fluidAmountElem;
+
+			// Build fluid flow direction arrow for contained fluid boxes.
+			var flowDirectionElem = document.createElement('img');
+			flowDirectionElem.src = 'img/flow-direction.png';
+			flowDirectionElem.style.left = '8px';
+			flowDirectionElem.style.top = '8px';
+			flowDirectionElem.style.position = 'relative';
+			var showFluidAmount = document.getElementById('showFluidAmount');
+			flowDirectionElem.style.display = showFluidAmount.checked ? 'block' : 'none'; // To prevent flickering when unchecked
+			tileElem.appendChild(flowDirectionElem);
+			this.flowDirectionElem = flowDirectionElem;
 		}
 	},
 
@@ -864,6 +875,8 @@ inherit(FluidContainer, Structure, {
 			return;
 		var thisPos = [idx % size, Math.floor(idx / size)];
 		var relDir = [[-1,0], [0,-1], [1,0], [0,1]];
+		var biggestFlowIdx = -1;
+		var biggestFlowAmount = 1e-3; // At least this amount of flow is required for displaying flow direction
 		for(var n = 0; n < this.fluidBox.length; n++){
 			var thisFluidBox = this.fluidBox[n];
 			// In an unlikely event, a fluid box without either input or output ports has nothing to do
@@ -893,6 +906,10 @@ inherit(FluidContainer, Structure, {
 					nextFluidBox.amount -= flow;
 					thisFluidBox.amount += flow;
 					nextFluidBox.type = thisFluidBox.type;
+					if(Math.abs(biggestFlowAmount) < Math.abs(flow)){
+						biggestFlowAmount = flow;
+						biggestFlowIdx = i;
+					}
 				}
 			}
 		}
@@ -905,9 +922,28 @@ inherit(FluidContainer, Structure, {
 				this.fluidAmountElem.style.top = (28 - barHeight) + 'px';
 				// Change the bar color according to the type of the fluid.
 				this.fluidAmountElem.style.backgroundColor = this.fluidBox[0].type === 'Water' ? '#007f7f' : '#7f7f7f';
+
+				if(0 <= biggestFlowIdx){
+					var rotation = biggestFlowIdx;
+					// Invert the direction of the arrow if the flow goes outward
+					if(0 < biggestFlowAmount)
+						rotation = (rotation + 2) % 4;
+					var scale = 1;
+					if(Math.abs(biggestFlowAmount) < 0.01)
+						scale = 0.5;
+					else if(Math.abs(biggestFlowAmount) < 0.1)
+						scale = 0.75;
+					this.flowDirectionElem.style.display = 'block';
+					this.flowDirectionElem.style.transform = 'scale(' + scale + ',' + scale
+					 + ') rotate(' + (rotation * 90) + 'deg)';
+				}
+				else
+					this.flowDirectionElem.style.display = 'none';
 			}
-			else
+			else{
 				this.fluidAmountElem.style.display = 'none';
+				this.flowDirectionElem.style.display = 'none';
+			}
 		}
 	},
 
