@@ -1789,6 +1789,19 @@ function harvest(tile){
 	}
 }
 
+/// Add a structure symbol (blue square) on the minimap at the top right with
+/// coordinates (c, r)
+function addMinimapSymbol(c, r, tile){
+	var symbol = tile.structure.miniMapSymbol = document.createElement('div');
+	symbol.style.backgroundColor = '#0000ff';
+	symbol.style.width = Math.ceil(miniMapSize / xsize) + 'px';
+	symbol.style.height = Math.ceil(miniMapSize / ysize) + 'px';
+	symbol.style.left = Math.floor(c * miniMapSize / xsize) + 'px';
+	symbol.style.top = Math.floor(r * miniMapSize / ysize) + 'px';
+	symbol.style.position = 'absolute';
+	miniMapElem.appendChild(symbol);
+}
+
 function createElements(){
 	tileElems = new Array(viewPortWidth * viewPortHeight);
 
@@ -1862,14 +1875,7 @@ function createElements(){
 					tile.structure = new tool;
 					tile.structure.tile = board[c + r * ysize];
 					tile.structure.rotation = currentRotation;
-					var symbol = tile.structure.miniMapSymbol = document.createElement('div');
-					symbol.style.backgroundColor = '#0000ff';
-					symbol.style.width = Math.ceil(miniMapSize / xsize) + 'px';
-					symbol.style.height = Math.ceil(miniMapSize / ysize) + 'px';
-					symbol.style.left = Math.floor(c * miniMapSize / xsize) + 'px';
-					symbol.style.top = Math.floor(r * miniMapSize / ysize) + 'px';
-					symbol.style.position = 'absolute';
-					miniMapElem.appendChild(symbol);
+					addMinimapSymbol(c, r, tile);
 					if(--player.inventory[tool.prototype.name] === 0)
 						delete player.inventory[tool.prototype.name];
 					updatePlayer();
@@ -2598,7 +2604,7 @@ var serialize = this.serialize = function serialize(){
 		serialNo: serialNo,
 	};
 	var objectsData = [];
-	for(let i = 0; i < objects.length; i++){
+	for(var i = 0; i < objects.length; i++){
 		objectsData.push(objects[i].serialize());
 	}
 	saveData.objects = objectsData;
@@ -2646,6 +2652,16 @@ var deserialize = this.deserialize = function deserialize(stream){
 		// is visible in the viewport.  Also it must happen after createElements().
 		for(var i = 0; i < objects.length; i++)
 			objects[i].addElem();
+
+		// Create minimap symbols for existing structures since they are not automatically added
+		// in updateAllTiles().
+		for(var x = 0; x < xsize; x++){
+			for(var y = 0; y < ysize; y++){
+				var tile = board[x + y * ysize];
+				if(tile.structure)
+					addMinimapSymbol(x, y, tile);
+			}
+		}
 
 		miniMapElem.style.width = miniMapSize + 'px';
 		miniMapElem.style.height = miniMapSize + 'px';
