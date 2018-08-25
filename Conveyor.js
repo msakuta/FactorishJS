@@ -2,7 +2,8 @@ var Conveyor = new (function(){
 'use strict';
 var container;
 var table;
-var size;
+var xsize;
+var ysize;
 var viewPortWidth;
 var viewPortHeight;
 var board;
@@ -25,6 +26,8 @@ var miniMapSize = 200;
 var miniMapElem;
 var miniMapCursorElem;
 var recipeTarget = null;
+var simstep = 0;
+var autosave_frame = 0;
 
 // Constants
 var tilesize = 32;
@@ -40,6 +43,16 @@ var toolCursorElem;
 var player = {inventory: {}};
 var selectedInventory = null;
 var selectedInventoryItem = null;
+
+player.serialize = function(){
+	return {inventory: this.inventory};
+}
+
+player.deserialize = function(obj){
+	if(obj){
+		this.inventory = obj.inventory || {};
+	}
+}
 
 /// @returns Amount of items actually moved
 player.addItem = function(item){
@@ -122,6 +135,20 @@ function inherit(subclass,base,methods,addMixin){
 
 function Structure(){
 	this.tile = null;
+	this.rotation = 0;
+}
+
+/// Serializes this object into a JSON object.
+/// It is required to override this function correctly for all subclasses.
+/// In order to make it hard to forget overriding, the method is inserted right after the constructor.
+Structure.prototype.serialize = function(){
+	return {type: this.name, rotation: this.rotation};
+};
+
+/// Deserializes this object from a JSON object.
+/// It is inverse operation of serialize, so always make it symmetric.
+Structure.prototype.deserialize = function(obj){
+	this.rotation = obj.rotation || 0;
 }
 
 Structure.prototype.toolDesc = function(){
@@ -197,8 +224,8 @@ inherit(TransportBelt, Structure, {
 	objectResponse: function(tile, o){
 		var vx = [-1, 0, 1, 0][this.rotation];
 		var vy = [0, -1, 0, 1][this.rotation];
-		var newx = Math.min(size * tilesize, Math.max(0, o.x + vx));
-		var newy = Math.min(size * tilesize, Math.max(0, o.y + vy));
+		var newx = Math.min(xsize * tilesize, Math.max(0, o.x + vx));
+		var newy = Math.min(ysize * tilesize, Math.max(0, o.y + vy));
 		if(!movableTile(newx, newy) || hitCheck(newx, newy, o))
 			return;
 		o.x = newx;
@@ -223,6 +250,17 @@ function Inserter(){
 inherit(Inserter, Structure, {
 	name: "Inserter",
 	symbol: ["&lt;<br>I", "^<br>I", "&gt;<br>I", "V<br>I"],
+
+	serialize: function(){
+		var ret = Structure.prototype.serialize.call(this);
+		ret.cooldown = this.cooldown;
+		return ret;
+	},
+
+	deserialize: function(obj){
+		Structure.prototype.deserialize.call(this, obj);
+		this.cooldown = obj.cooldown;
+	},
 
 	toolDesc: function(){
 		return 'Picks items from one side and puts on the other side<br>in the direction indicated by an arrow.<br>Costs no energy to operate.';
@@ -251,17 +289,17 @@ inherit(Inserter, Structure, {
 		if(0 < this.cooldown)
 			return;
 		var idx = board.indexOf(this.tile);
-		var tx = idx % size;
-		var ty = Math.floor(idx / size);
+		var tx = idx % ysize;
+		var ty = Math.floor(idx / ysize);
 
 		var vx = [-1, 0, 1, 0][this.rotation];
 		var vy = [0, -1, 0, 1][this.rotation];
 		var sx = tx - vx;
 		var sy = ty - vy;
-		var sourceTile = board[sx + sy * size];
+		var sourceTile = board[sx + sy * ysize];
 		var dx = tx + vx;
 		var dy = ty + vy;
-		var destTile = board[dx + dy * size];
+		var destTile = board[dx + dy * ysize];
 
 		// If the source is a producer and destination is a transport belt, put a product into the belt.
 		if(sourceTile.structure && sourceTile.structure.output){
@@ -289,6 +327,19 @@ function Container(){
 	this.inventory = {};
 }
 inherit(Container, Structure);
+
+Container.prototype.serialize = function(){
+	var ret = Structure.prototype.serialize.call(this);
+	// The inventory is just an object with item name as a key and item count as a value,
+	// so it can be converted to JSON without filtering.
+	ret.inventory = this.inventory; 
+	return ret;
+}
+
+Container.prototype.deserialize = function(obj){
+	Structure.prototype.deserialize.call(this, obj);
+	this.inventory = obj.inventory;
+}
 
 /// Print contents of inventory
 Container.prototype.desc = function(tile){
@@ -385,6 +436,23 @@ inherit(OreMine, Container, {
 	name: "Ore Mine",
 	symbol: ["&lt;<br>Mi", "^<br>Mi", "&gt;<br>Mi", "V<br>Mi"],
 
+	serialize: function(){
+		var ret = Container.prototype.serialize.call(this);
+		ret.cooldown = this.cooldown;
+		ret.recipe = this.recipe; // A bit cheaty that you can rewrite save file to get any recipe you want
+		ret.power = this.power;
+		ret.maxPower = this.maxPower;
+		return ret;
+	},
+
+	deserialize: function(obj){
+		Container.prototype.deserialize.call(this, obj);
+		this.cooldown = obj.cooldown;
+		this.recipe = obj.recipe;
+		this.power = obj.power;
+		this.maxPower = obj.maxPower;
+	},
+
 	toolDesc: function(){
 		return 'Mines ores and puts them to adjacent ground<br>or a structure in the direction indicated by an arrow.<br>Requires coal ores to operate.';
 	},
@@ -466,13 +534,13 @@ inherit(OreMine, Container, {
 		}
 
 		var idx = board.indexOf(this.tile);
-		var tx = idx % size;
-		var ty = Math.floor(idx / size);
+		var tx = idx % ysize;
+		var ty = Math.floor(idx / ysize);
 		var vx = [-1, 0, 1, 0][this.rotation];
 		var vy = [0, -1, 0, 1][this.rotation];
 		var dx = tx + vx;
 		var dy = ty + vy;
-		var destTile = board[dx + dy * size];
+		var destTile = board[dx + dy * ysize];
 
 		// Ore mine can output minerals without inserters
 		this.output(dx, dy);
@@ -521,6 +589,27 @@ function Factory(){
 	this.maxPower = 0;
 }
 inherit(Factory, Container, {
+	serialize: function(){
+		var ret = Container.prototype.serialize.call(this);
+		ret.coodown = this.cooldown;
+		ret.consumeCooldown = this.consumeCooldown;
+		ret.recipe = this.recipe; // A bit cheaty that you can rewrite save file to get any recipe you want
+		ret.processing = this.processing;
+		ret.power = this.power;
+		ret.maxPower = this.maxPower;
+		return ret;
+	},
+
+	deserialize: function(obj){
+		Container.prototype.deserialize.call(this, obj);
+		this.cooldown = obj.cooldown;
+		this.consumeCooldown = obj.consumeCooldown;
+		this.recipe = obj.recipe;
+		this.processing = obj.processing;
+		this.power = obj.power;
+		this.maxPower = obj.maxPower;
+	},
+
 	desc: function(tile){
 		var ret;
 		var powerStr = this.isBurner() && this.power !== undefined ? "Power: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
@@ -703,6 +792,19 @@ inherit(Assembler, Factory, {
 	name: "Assembler",
 	symbol: 'A',
 
+	serialize: function(){
+		var ret = Factory.prototype.serialize.call(this);
+		ret.electricity = this.electricity;
+		ret.maxElectricity = this.maxElectricity;
+		return ret;
+	},
+
+	deserialize: function(obj){
+		Factory.prototype.deserialize.call(this, obj);
+		this.electricity = obj.electricity;
+		this.maxElectricity = obj.maxElectricity;
+	},
+
 	toolDesc: function(){
 		return 'Assembles items from ingredients with recipes.<br>Set a recipe in the inventory GUI to operate.<br>Requires electricity to operate.';
 	},
@@ -826,6 +928,28 @@ function FluidBox(inputEnable, outputEnable, filter, connectTo){
 	this.filter = filter; // permits undefined
 }
 
+FluidBox.prototype.serialize = function(){
+	return {
+		type: this.type,
+		amount: this.amount,
+		maxAmount: this.maxAmount,
+		inputEnable: this.inputEnable,
+		outputEnable: this.outputEnable,
+		connectTo: this.connectTo,
+		filter: this.filter,
+	};
+}
+
+FluidBox.prototype.deserialize = function(obj){
+	this.type = obj.type;
+	this.amount = obj.amount;
+	this.maxAmount = obj.maxAmount;
+	this.inputEnable = obj.inputEnable;
+	this.outputEnable = obj.outputEnable;
+	this.connectTo = obj.connectTo;
+	this.filter = obj.filter;
+}
+
 FluidBox.prototype.freeCapacity = function(){
 	return this.maxAmount - this.amount;
 }
@@ -835,6 +959,29 @@ function FluidContainer(){
 	this.fluidBox = [new FluidBox()];
 }
 inherit(FluidContainer, Structure, {
+	serialize: function(){
+		var ret = Structure.prototype.serialize.call(this);
+		ret.fluidBox = [];
+		for(var i = 0; i < this.fluidBox.length; i++){
+			var fluidBox = this.fluidBox[i];
+			ret.fluidBox.push(fluidBox.serialize());
+		}
+		return ret;
+	},
+
+	deserialize: function(obj){
+		Structure.prototype.deserialize.call(this, obj);
+		if(obj.fluidBox === undefined)
+			return;
+		this.fluidBox = [];
+		for(var i = 0; i < obj.fluidBox.length; i++){
+			var fluidBoxObj = obj.fluidBox[i];
+			var fluidBox = new FluidBox();
+			fluidBox.deserialize(fluidBoxObj);
+			this.fluidBox.push(fluidBox);
+		}
+	},
+
 	desc: function(tile){
 		var ret = '';
 		for(var n = 0; n < this.fluidBox.length; n++){
@@ -873,7 +1020,7 @@ inherit(FluidContainer, Structure, {
 		var idx = board.indexOf(this.tile);
 		if(idx < 0)
 			return;
-		var thisPos = [idx % size, Math.floor(idx / size)];
+		var thisPos = [idx % ysize, Math.floor(idx / ysize)];
 		var relDir = [[-1,0], [0,-1], [1,0], [0,1]];
 		var biggestFlowIdx = -1;
 		var biggestFlowAmount = 1e-3; // At least this amount of flow is required for displaying flow direction
@@ -885,9 +1032,9 @@ inherit(FluidContainer, Structure, {
 			for(var i = 0; i < thisFluidBox.connectTo.length; i++){
 				var thisRelDir = (thisFluidBox.connectTo[i] + this.rotation) % 4;
 				var pos = [thisPos[0] + relDir[thisRelDir][0], thisPos[1] + relDir[thisRelDir][1]];
-				if(pos[0] < 0 || size <= pos[0] || pos[1] < 0 || size <= pos[1])
+				if(pos[0] < 0 || xsize <= pos[0] || pos[1] < 0 || ysize <= pos[1])
 					continue;
-				var nextTile = board[pos[0] + pos[1] * size];
+				var nextTile = board[pos[0] + pos[1] * ysize];
 				if(!nextTile.structure || !(nextTile.structure instanceof FluidContainer))
 					continue;
 				var nextStruct = nextTile.structure;
@@ -949,7 +1096,7 @@ inherit(FluidContainer, Structure, {
 
 	connection: function(){
 		function hasFluidBox(x,y){
-			if(x < 0 || size <= x || y < 0 || size <= y)
+			if(x < 0 || xsize <= x || y < 0 || ysize <= y)
 				return null;
 			var tile = tileAt(x, y);
 			if(tile.structure && tile.structure.fluidBox)
@@ -1021,6 +1168,16 @@ inherit(Boiler, FluidContainer, {
 }, Burner.prototype)
 mixin(Boiler.prototype, Factory.prototype);
 
+Boiler.prototype.serialize = function(){
+	return mixin(FluidContainer.prototype.serialize.call(this),
+		Factory.prototype.serialize.call(this));
+}
+
+Boiler.prototype.deserialize = function(obj){
+	FluidContainer.prototype.deserialize.call(this, obj);
+	Factory.prototype.deserialize.call(this, obj);
+}
+
 Boiler.prototype.toolDesc = function(){
 	return 'Burns coal ores and use the generated heat to convert water into steam.';
 }
@@ -1076,7 +1233,6 @@ Boiler.prototype.connection = FluidContainer.prototype.connection;
 
 function Pipe(){
 	FluidContainer.call(this);
-	this.amount = 0;
 }
 inherit(Pipe, FluidContainer, {
 	name: "Pipe",
@@ -1120,6 +1276,19 @@ inherit(SteamEngine, FluidContainer, {
 	name: "SteamEngine",
 	symbol: 'E',
 
+	serialize: function(){
+		var ret = FluidContainer.prototype.serialize.call(this);
+		ret.power = this.power;
+		ret.maxPower = this.maxPower;
+		return ret;
+	},
+
+	deserialize: function(obj){
+		FluidContainer.prototype.deserialize.call(this, obj);
+		this.power = obj.power;
+		this.maxPower = obj.maxPower;
+	},
+
 	toolDesc: function(){
 		return 'Consumes steam and transmits electricity within a range of 3 tiles.';
 	},
@@ -1158,11 +1327,11 @@ inherit(SteamEngine, FluidContainer, {
 			var idx = board.indexOf(this.tile);
 			if(idx < 0)
 				return;
-			var thisPos = [idx % size, Math.floor(idx / size)];
+			var thisPos = [idx % ysize, Math.floor(idx / ysize)];
 
-			for(var y = Math.max(0, thisPos[1] - pdrange); y <= Math.min(size-1, thisPos[1] + pdrange); y++)
-			for(var x = Math.max(0, thisPos[0] - pdrange); x <= Math.min(size-1, thisPos[0] + pdrange); x++){
-				var tile = board[x + y * size];
+			for(var y = Math.max(0, thisPos[1] - pdrange); y <= Math.min(ysize-1, thisPos[1] + pdrange); y++)
+			for(var x = Math.max(0, thisPos[0] - pdrange); x <= Math.min(xsize-1, thisPos[0] + pdrange); x++){
+				var tile = board[x + y * ysize];
 				if(tile.structure && tile.structure.maxElectricity){
 					var distributed = Math.min(this.maxPower, tile.structure.maxElectricity - tile.structure.electricity);
 					tile.structure.electricity += distributed;
@@ -1186,6 +1355,12 @@ var toolDefs = [
 	SteamEngine,
 ];
 
+/// A reverse map that can look up structure constructor from its type name.
+var structureMap = {};
+for(var i in toolDefs){
+	structureMap[toolDefs[i].prototype.name] = toolDefs[i];
+}
+
 var currentTool = -1;
 var currentRotation = 0;
 
@@ -1194,7 +1369,7 @@ var objects = [];
 function coordOfTile(tile){
 	var idx = board.indexOf(tile);
 	if(0 <= idx)
-		return [ idx % size, Math.floor(idx / size)];
+		return [ idx % ysize, Math.floor(idx / ysize)];
 	else
 		return null;
 }
@@ -1204,13 +1379,13 @@ function tileAt(x, y){
 		y = x[1];
 		x = x[0];
 	}
-	return board[x + y * size];
+	return board[x + y * ysize];
 }
 
 
 function iterateTiles(func){
-	for(var iy = 0; iy < size; iy++){
-		for(var ix = 0; ix < size; ix++){
+	for(var iy = 0; iy < ysize; iy++){
+		for(var ix = 0; ix < ysize; ix++){
 			func(ix, iy);
 		}
 	}
@@ -1225,7 +1400,7 @@ function rotate(){
 		}
 	}
 	else if(selectedCoords !== null){
-		var tile = board[selectedCoords[0] + selectedCoords[1] * size];
+		var tile = board[selectedCoords[0] + selectedCoords[1] * ysize];
 		if(tile.structure){
 			tile.structure.rotation = (tile.structure.rotation + 1) % 4;
 			updateTile(tile);
@@ -1369,13 +1544,13 @@ function onKeyDown(event){
 		}
 	}
 	else if(event.keyCode === 39){ // Right arrow
-		if(scrollPos[0] + 1 < size - viewPortWidth){
+		if(scrollPos[0] + 1 < xsize - viewPortWidth){
 			scrollPos[0]++;
 			updateAllTiles();
 		}
 	}
 	else if(event.keyCode === 40){ // Down arrow
-		if(scrollPos[1] + 1 < size - viewPortHeight){
+		if(scrollPos[1] + 1 < ysize - viewPortHeight){
 			scrollPos[1]++;
 			updateAllTiles();
 		}
@@ -1400,7 +1575,7 @@ function bringToTop(elem){
 
 var toolTip;
 
-window.onload = function(){
+window.addEventListener("load", function(){
 	window.addEventListener( 'keydown', onKeyDown, false );
 
 	// Set element style to initialize invisible element.
@@ -1421,7 +1596,12 @@ window.onload = function(){
 	viewPortWidth = 16;
 	viewPortHeight = 12;
 
-	generateBoard();
+	if(typeof(Storage) !== "undefined"){
+		deserialize(localStorage.getItem("ConveyorGameSave"));
+	}
+	else{
+		generateBoard();
+	}
 
 	// Shared event handler for window headers
 	function dragWindowMouseDown(evt,elem,pos){
@@ -1489,7 +1669,7 @@ window.onload = function(){
 	window.setInterval(function(){
 		run();
 	}, 50);
-}
+})
 
 window.addEventListener('resize', onSize);
 
@@ -1500,8 +1680,8 @@ function getTileElem(x, y){
 /// Update single tile graphics to match internal data
 function updateTile(tile){
 	var idx = board.indexOf(tile);
-	var c = idx % size - scrollPos[0];
-	var r = Math.floor(idx / size) - scrollPos[1];
+	var c = idx % ysize - scrollPos[0];
+	var r = Math.floor(idx / ysize) - scrollPos[1];
 	var tileElem = getTileElem(c, r);
 	if(!tileElem)
 		return;
@@ -1551,7 +1731,7 @@ function updateTile(tile){
 function updateAllTiles(){
 	for(var iy = 0; iy < viewPortHeight; iy++){
 		for(var ix = 0; ix < viewPortWidth; ix++)
-			updateTile(board[(ix + scrollPos[0]) + (iy + scrollPos[1]) * size]);
+			updateTile(board[(ix + scrollPos[0]) + (iy + scrollPos[1]) * ysize]);
 	}
 	for(var i = 0; i < objects.length; i++)
 		positionObject(objects[i]);
@@ -1559,8 +1739,8 @@ function updateAllTiles(){
 }
 
 function updateMiniMapPos(){
-	miniMapCursorElem.style.left = (scrollPos[0] * miniMapSize / size) + 'px';
-	miniMapCursorElem.style.top = (scrollPos[1] * miniMapSize / size) + 'px';
+	miniMapCursorElem.style.left = (scrollPos[0] * miniMapSize / xsize) + 'px';
+	miniMapCursorElem.style.top = (scrollPos[1] * miniMapSize / ysize) + 'px';
 }
 
 function updateTool(tool){
@@ -1596,8 +1776,8 @@ function harvest(tile){
 	}
 	else{
 		var idx = board.indexOf(tile);
-		var x = idx % size;
-		var y = Math.floor(idx / size);
+		var x = idx % ysize;
+		var y = Math.floor(idx / ysize);
 		findItem(x, y, function(o){
 			if(o.type in player.inventory)
 				player.inventory[o.type] += 1;
@@ -1655,7 +1835,7 @@ function createElements(){
 				var idx = tileElems.indexOf(this);
 				var c = idx % viewPortWidth + scrollPos[0];
 				var r = Math.floor(idx / viewPortWidth) + scrollPos[1];
-				var tile = board[c + r * size];
+				var tile = board[c + r * ysize];
 				var connection = tile.structure ? tile.structure.connection() : 0;
 
 				if(e.button !== 0){
@@ -1680,14 +1860,14 @@ function createElements(){
 					// object, because it would force us to recreate and replace existing tile object
 					// everytime structure is built on it.
 					tile.structure = new tool;
-					tile.structure.tile = board[c + r * size];
+					tile.structure.tile = board[c + r * ysize];
 					tile.structure.rotation = currentRotation;
 					var symbol = tile.structure.miniMapSymbol = document.createElement('div');
 					symbol.style.backgroundColor = '#0000ff';
-					symbol.style.width = Math.ceil(miniMapSize / size) + 'px';
-					symbol.style.height = Math.ceil(miniMapSize / size) + 'px';
-					symbol.style.left = Math.floor(c * miniMapSize / size) + 'px';
-					symbol.style.top = Math.floor(r * miniMapSize / size) + 'px';
+					symbol.style.width = Math.ceil(miniMapSize / xsize) + 'px';
+					symbol.style.height = Math.ceil(miniMapSize / ysize) + 'px';
+					symbol.style.left = Math.floor(c * miniMapSize / xsize) + 'px';
+					symbol.style.top = Math.floor(r * miniMapSize / ysize) + 'px';
 					symbol.style.position = 'absolute';
 					miniMapElem.appendChild(symbol);
 					if(--player.inventory[tool.prototype.name] === 0)
@@ -1840,8 +2020,8 @@ function createElements(){
 	miniMapElem.style.border = '1px solid #000';
 	miniMapElem.onclick = function(evt){
 		var rect = this.getBoundingClientRect();
-		scrollPos[0] = Math.min(size - viewPortWidth - 1, Math.max(0, Math.floor((evt.clientX - rect.left) / rect.width * size - viewPortWidth / 2.)));
-		scrollPos[1] = Math.min(size - viewPortHeight - 1, Math.max(0, Math.floor((evt.clientY - rect.top) / rect.height * size - viewPortHeight / 2.)));
+		scrollPos[0] = Math.min(xsize - viewPortWidth - 1, Math.max(0, Math.floor((evt.clientX - rect.left) / rect.width * xsize - viewPortWidth / 2.)));
+		scrollPos[1] = Math.min(ysize - viewPortHeight - 1, Math.max(0, Math.floor((evt.clientY - rect.top) / rect.height * ysize - viewPortHeight / 2.)));
 		updateAllTiles();
 	};
 	container.appendChild(miniMapElem);
@@ -2012,9 +2192,9 @@ function updateInfo(){
 		infoElem.innerHTML = 'Empty tile';
 		return;
 	}
-	if(size <= selectedCoords[0] && size <= selectedCoords[1])
+	if(xsize <= selectedCoords[0] && ysize <= selectedCoords[1])
 		return;
-	var tile = board[selectedCoords[0] + selectedCoords[1] * size];
+	var tile = board[selectedCoords[0] + selectedCoords[1] * ysize];
 	if(!tile || !tile.structure){
 		infoElem.innerHTML = 'Empty tile<br>' +
 			'Iron Ore: ' + tile.ironOre + '<br>' +
@@ -2154,7 +2334,7 @@ function selectTile(sel){
 	var ix = vx + scrollPos[0];
 	var iy = vy + scrollPos[1];
 	selectedCoords = [ix, iy];
-	if(ix < size && iy < size){
+	if(ix < xsize && iy < ysize){
 		if(!cursorElem){
 			cursorElem = document.createElement('div');
 			cursorElem.style.border = '2px blue solid';
@@ -2175,18 +2355,18 @@ function generateBoard(){
 	createElements();
 
 	var sizeStr = document.getElementById("sizeSelect").value;
-	size = parseInt(sizeStr);
-	board = new Array(size * size);
+	xsize = ysize = parseInt(sizeStr); // We don't support non-square world shape yet
+	board = new Array(xsize * ysize);
 
-	for(var i = 0; i < size * size; i++)
+	for(var i = 0; i < xsize * ysize; i++)
 		board[i] = newblock(i);
 
-	scrollPos[0] = Math.max(0, Math.floor((size - viewPortWidth) / 2.));
-	scrollPos[1] = Math.max(0, Math.floor((size - viewPortHeight) / 2.));
+	scrollPos[0] = Math.max(0, Math.floor((xsize - viewPortWidth) / 2.));
+	scrollPos[1] = Math.max(0, Math.floor((ysize - viewPortHeight) / 2.));
 	miniMapElem.style.width = miniMapSize + 'px';
 	miniMapElem.style.height = miniMapSize + 'px';
-	miniMapCursorElem.style.width = ((viewPortWidth + 1) * miniMapSize / size - 1) + 'px';
-	miniMapCursorElem.style.height = ((viewPortHeight + 1) * miniMapSize / size - 1) + 'px';
+	miniMapCursorElem.style.width = ((viewPortWidth + 1) * miniMapSize / xsize - 1) + 'px';
+	miniMapCursorElem.style.height = ((viewPortHeight + 1) * miniMapSize / ysize - 1) + 'px';
 	updateAllTiles();
 
 	// Initial inventory of player
@@ -2205,15 +2385,48 @@ function generateBoard(){
 }
 this.generateBoard = generateBoard;
 
+function Tile(){
+	this.structure = null;
+	this.ironOre = 0;
+	this.copperOre = 0;
+	this.coalOre = 0;
+}
+
+Tile.prototype.serialize = function(){
+	var ret = {}
+	if(this.structure){
+		ret.structure = {type: this.structure.name};
+		ret.structure = this.structure.serialize();
+	}
+	var names = ["ironOre", "copperOre", "coalOre"];
+	for(var i in names){
+		var name = names[i];
+		if(this[name])
+			ret[name] = this[name];
+	}
+	return ret;
+}
+
+Tile.prototype.deserialize = function(obj){
+	this.structure = null;
+	if(obj.structure && obj.structure.type){
+		var constructor = structureMap[obj.structure.type];
+		if(constructor){
+			this.structure = new constructor;
+			this.structure.tile = this;
+			this.structure.deserialize(obj.structure);
+		}
+	}
+	this.ironOre = obj.ironOre || 0;
+	this.copperOre = obj.copperOre || 0;
+	this.coalOre = obj.coalOre || 0;
+}
+
+
 function newblock(i){
-	var x = i % size;
-	var y = Math.floor(i / size);
-	var obj = {
-		structure: null,
-		ironOre: 0,
-		copperOre: 0,
-		coalOre: 0,
-	};
+	var x = i % ysize;
+	var y = Math.floor(i / ysize);
+	var obj = new Tile();
 	var iron = Math.max(0, (perlin_noise_pixel(x, y, 8) * 4000 - 3000).toFixed())
 	var copper = Math.max(0, (perlin_noise_pixel(x, y, 9) * 4000 - 3000).toFixed())
 	var coal = Math.max(0, (perlin_noise_pixel(x, y, 10) * 2000 - 1500).toFixed())
@@ -2240,12 +2453,12 @@ var serialNo = 0;
 function movableTile(x, y){
 	var tx = Math.floor(x / tilesize);
 	var ty = Math.floor(y / tilesize);
-	if(tx < 0 || size < tx || ty < 0 || size < ty || isNaN(tx) || isNaN(ty))
+	if(tx < 0 || xsize < tx || ty < 0 || ysize < ty || isNaN(tx) || isNaN(ty))
 		return false;
 	// Ojects should not be placed on an empty tile
-	if(!board[tx + ty * size].structure)
+	if(!board[tx + ty * ysize].structure)
 		return false;
-	return board[tx + ty * size].structure.movable();
+	return board[tx + ty * ysize].structure.movable();
 }
 
 /// Check whether given coordinates hits some object
@@ -2260,32 +2473,60 @@ function hitCheck(x, y, ignore){
 	return false;
 }
 
+/// A class representing dropped item on the ground (not the items in an inventory)
+function DropItem(c, r, type){
+	this.id = serialNo++;
+	this.type = type;
+	this.x = c * tilesize + tilesize / 2;
+	this.y = r * tilesize + tilesize / 2;
+}
+
+DropItem.prototype.serialize = function(){
+	return {
+		id: this.id,
+		type: this.type,
+		x: this.x,
+		y: this.y,
+	};
+}
+
+DropItem.prototype.deserialize = function(obj){
+	this.id = obj.id;
+	this.type = obj.type;
+	this.x = obj.x;
+	this.y = obj.y;
+}
+
+DropItem.prototype.addElem = function(){
+	this.elem = document.createElement('div');
+	var file = getImageFile(this.type);
+	if(file)
+		this.elem.style.backgroundImage = 'url("' + file + '")';
+	else
+		this.elem.innerHTML = type;
+	this.elem.style.backgroundSize = objViewSize + 'px ' + objViewSize + 'px';
+	// Debug graphic for bounding box
+//			this.elem.style.border = '1px solid';
+	this.elem.style.width = objViewSize + 'px';
+	this.elem.style.height = objViewSize + 'px';
+	this.elem.style.position = 'absolute';
+	// Disable mouse events since we don't want an object to catch mouse event when
+	// we're adding a structure to a tile.
+	this.elem.style.pointerEvents = 'none';
+	this.elem.setAttribute('class', 'noselect');
+	positionObject(this);
+	table.appendChild(this.elem);
+}
+
 /// Insert an object on the board.  It could fail if there's already some object at the position.
 function newObject(c, r, type){
-	var obj = {id: serialNo++, type: type, x: c * tilesize + tilesize / 2, y: r * tilesize + tilesize / 2};
-	if(0 <= c && c < size && 0 <= r && r < size && board[c + r * size].structure && !board[c + r * size].structure.movable()){
-		return board[c + r * size].structure.input(obj);
+	var obj = new DropItem(c, r, type);
+	if(0 <= c && c < xsize && 0 <= r && r < ysize && board[c + r * ysize].structure && !board[c + r * ysize].structure.movable()){
+		return board[c + r * ysize].structure.input(obj);
 	}
 	if(hitCheck(obj.x, obj.y))
 		return false;
-	obj.elem = document.createElement('div');
-	var file = getImageFile(type);
-	if(file)
-		obj.elem.style.backgroundImage = 'url("' + file + '")';
-	else
-		obj.elem.innerHTML = type;
-	obj.elem.style.backgroundSize = objViewSize + 'px ' + objViewSize + 'px';
-	// Debug graphic for bounding box
-//			obj.elem.style.border = '1px solid';
-	obj.elem.style.width = objViewSize + 'px';
-	obj.elem.style.height = objViewSize + 'px';
-	obj.elem.style.position = 'absolute';
-	// Disable mouse events since we don't want an object to catch mouse event when
-	// we're adding a structure to a tile.
-	obj.elem.style.pointerEvents = 'none';
-	obj.elem.setAttribute('class', 'noselect');
-	positionObject(obj);
-	table.appendChild(obj.elem);
+	obj.addElem();
 	objects.push(obj);
 	return true;
 }
@@ -2349,7 +2590,75 @@ function positionObject(obj){
 	obj.elem.style.top = (vy - objViewSize / 2) + 'px';
 }
 
-var simstep = 0;
+var serialize = this.serialize = function serialize(){
+	var saveData = {
+		simstep: simstep,
+		xsize: xsize, ysize: ysize,
+		scrollPos: scrollPos,
+		serialNo: serialNo,
+	};
+	var objectsData = [];
+	for(let i = 0; i < objects.length; i++){
+		objectsData.push(objects[i].serialize());
+	}
+	saveData.objects = objectsData;
+	var tiles = [];
+	for(var x = 0; x < xsize; x++){
+		for(var y = 0; y < ysize; y++){
+			var v = board[y + x * ysize];
+			tiles.push(v.serialize());
+		}
+	}
+	saveData.tiles = tiles;
+	saveData.player = player.serialize();
+	return JSON.stringify(saveData);
+}
+
+var deserialize = this.deserialize = function deserialize(stream){
+	var data = JSON.parse(stream);
+	if(data !== null){
+		simstep = data.simstep;
+		autosave_frame = simstep;
+		xsize = data.xsize;
+		ysize = data.ysize;
+		scrollPos = data.scrollPos;
+		serialNo = data.serialNo || 0;
+		objects = [];
+		for(var i = 0; i < data.objects.length; i++){
+			var object = new DropItem();
+			object.deserialize(data.objects[i]);
+			objects.push(object);
+		}
+		board = [];
+		var tiles = data.tiles || data.cells;
+		for(var i = 0; i < tiles.length; i++){
+			var c = tiles[i];
+			if(!c)
+				continue;
+			var tile = new Tile();
+			tile.deserialize(c);
+			board.push(tile);
+		}
+		player.deserialize(data.player);
+		createElements();
+
+		// Create elements for objects since they are always reserved regardless of whether the item
+		// is visible in the viewport.  Also it must happen after createElements().
+		for(var i = 0; i < objects.length; i++)
+			objects[i].addElem();
+
+		miniMapElem.style.width = miniMapSize + 'px';
+		miniMapElem.style.height = miniMapSize + 'px';
+		miniMapCursorElem.style.width = ((viewPortWidth + 1) * miniMapSize / xsize - 1) + 'px';
+		miniMapCursorElem.style.height = ((viewPortHeight + 1) * miniMapSize / ysize - 1) + 'px';
+		updateAllTiles();
+
+		updatePlayer();
+	}
+	else{
+		generateBoard();
+	}
+}
 
 /// Simulation step function
 function run(){
@@ -2360,14 +2669,14 @@ function run(){
 		// Obtain coordinates and tile at the position
 		var tx = Math.floor(o.x / tilesize);
 		var ty = Math.floor(o.y / tilesize);
-		var tile = board[tx + ty * size];
+		var tile = board[tx + ty * ysize];
 		if(tile.structure)
 			tile.structure.objectResponse(tile, o);
 	}
 
-	for(var ty = 0; ty < size; ty++){
-		for(var tx = 0; tx < size; tx++){
-			var tile = board[tx + ty * size];
+	for(var ty = 0; ty < ysize; ty++){
+		for(var tx = 0; tx < xsize; tx++){
+			var tile = board[tx + ty * ysize];
 			if(tile.structure)
 				tile.structure.frameProc(tile);
 		}
@@ -2376,6 +2685,22 @@ function run(){
 	updateInfo();
 
 	simstep++;
+
+	if(autosave_frame + 100 < simstep){
+
+		// Check for localStorage
+		if(typeof(Storage) !== "undefined"){
+			var serialData = serialize();
+			localStorage.setItem("ConveyorGameSave", serialData);
+			//this.onAutoSave(serialData);
+			var autoSaveElem = document.getElementById("autoSaveText");
+			if(autoSaveElem){
+				autoSaveElem.value = serialData;
+			}
+		}
+
+		autosave_frame += 100;
+	}
 }
 
 })();
