@@ -2336,6 +2336,8 @@ function moveItem(src, dest, type){
 }
 
 function selectTile(sel){
+	if(sel === selectedTile)
+		return;
 	selectedTile = sel;
 	var idx = tileElems.indexOf(sel);
 	var vx = idx % viewPortWidth;
