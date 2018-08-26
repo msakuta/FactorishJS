@@ -1334,7 +1334,7 @@ inherit(SteamEngine, FluidContainer, {
 
 			for(var y = Math.max(0, thisPos[1] - pdrange); y <= Math.min(ysize-1, thisPos[1] + pdrange); y++)
 			for(var x = Math.max(0, thisPos[0] - pdrange); x <= Math.min(xsize-1, thisPos[0] + pdrange); x++){
-				var tile = board[x + y * ysize];
+				var tile = tileAt(x, y);
 				if(tile.structure && tile.structure.maxElectricity){
 					var distributed = Math.min(this.maxPower, tile.structure.maxElectricity - tile.structure.electricity);
 					tile.structure.electricity += distributed;
@@ -1382,7 +1382,7 @@ function tileAt(x, y){
 		y = x[1];
 		x = x[0];
 	}
-	return board[x + y * ysize];
+	return board[x + y * xsize];
 }
 
 
@@ -1487,6 +1487,7 @@ function showInventory(tile){
 		inventoryTarget = tile.structure;
 		var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
 		recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
+		toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
 		updateInventory();
 	}
 	else{
@@ -2357,6 +2358,28 @@ function selectTile(sel){
 		cursorElem.style.left = (tilesize * vx) + 'px';
 		cursorElem.style.width = '30px';
 		cursorElem.style.height = '30px';
+
+		// Show tooltip to hint the player that he can open the inventory
+		// by clicking, but only when it's available.
+		var tile = tileAt(ix, iy);
+		if(currentTool < 0 && inventoryElem.style.display === 'none' && tile.structure && tile.structure.inventory !== undefined){
+			var cr = table.getBoundingClientRect();
+			var r = sel.getBoundingClientRect();
+			toolTip.style.left = (r.left - cr.left) + 'px';
+			toolTip.style.top = (r.bottom - cr.top) + 'px';
+			toolTip.style.display = 'block';
+			var desc = "Click to open inventory";
+			if(0 < desc.length)
+				desc = '<br>' + desc;
+			toolTip.innerHTML = '<b>' + tile.structure.name + '</b>' + desc;
+			sel.onmouseleave = function(){
+				toolTip.style.display = 'none';
+				this.onmouseleave = null;
+			}
+		}
+		else
+			toolTip.style.display = 'none';
+
 		updateInfo();
 		updateInventory();
 	}
@@ -2662,7 +2685,7 @@ var deserialize = this.deserialize = function deserialize(stream){
 		// in updateAllTiles().
 		for(var x = 0; x < xsize; x++){
 			for(var y = 0; y < ysize; y++){
-				var tile = board[x + y * ysize];
+				var tile = tileAt(x, y);
 				if(tile.structure)
 					addMinimapSymbol(x, y, tile);
 			}
