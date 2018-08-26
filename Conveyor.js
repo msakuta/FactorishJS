@@ -12,6 +12,7 @@ var scrollPos = [0, 0];
 var selectedTile = null;
 var selectedCoords = null;
 var cursorElem;
+var cursorGhostElem;
 var messageElem;
 var debugText;
 var infoElem;
@@ -1401,6 +1402,7 @@ function rotate(){
 			toolDefs[i].prototype.rotation = currentRotation;
 			updateTool(i);
 		}
+		updateCursorGhost();
 	}
 	else if(selectedCoords !== null){
 		var tile = board[selectedCoords[0] + selectedCoords[1] * ysize];
@@ -1806,6 +1808,16 @@ function addMinimapSymbol(c, r, tile){
 	miniMapElem.appendChild(symbol);
 }
 
+function updateCursorGhost(){
+	if(!cursorGhostElem)
+		return;
+	// Remove the previous content first
+	while(cursorGhostElem.firstChild)
+		cursorGhostElem.removeChild(cursorGhostElem.firstChild);
+	if(0 <= currentTool)
+		toolDefs[currentTool].prototype.draw.call(toolDefs[currentTool].prototype, cursorGhostElem, true);
+}
+
 function createElements(){
 	tileElems = new Array(viewPortWidth * viewPortHeight);
 
@@ -1816,8 +1828,6 @@ function createElements(){
 		outerContainer.removeChild(container);
 	container = document.createElement("div");
 	outerContainer.appendChild(container);
-	if(cursorElem)
-		cursorElem = null;
 	if(toolCursorElem)
 		toolCursorElem = null;
 
@@ -1829,6 +1839,18 @@ function createElements(){
 	table.style.left = '50%';
 	table.style.width = (viewPortWidth * tilesize) + 'px';
 	table.style.height = (viewPortHeight * tilesize) + 'px';
+
+	// Tile cursor
+	cursorElem = document.createElement('div');
+	cursorElem.style.border = '2px blue solid';
+	cursorElem.style.pointerEvents = 'none';
+	cursorElem.style.display = 'none';
+	cursorElem.style.zIndex = 100;
+	table.appendChild(cursorElem);
+	// Cursor ghost is a container for a preview of which structure will be built.
+	cursorGhostElem = document.createElement('div');
+	cursorGhostElem.style.opacity = 0.5;
+	cursorElem.appendChild(cursorGhostElem);
 
 	messageElem = document.createElement('div');
 	container.appendChild(messageElem);
@@ -1945,8 +1967,11 @@ function createElements(){
 			toolCursorElem.style.height = '30px';
 			toolCursorElem.style.display = 'block';
 		}
-		else if(toolCursorElem)
-			toolCursorElem.style.display = 'none';
+		else{
+			if(toolCursorElem)
+				toolCursorElem.style.display = 'none';
+		}
+		updateCursorGhost();
 	}
 
 	// Reset the state before initializing toolbar elements
@@ -2347,12 +2372,7 @@ function selectTile(sel){
 	var iy = vy + scrollPos[1];
 	selectedCoords = [ix, iy];
 	if(ix < xsize && iy < ysize){
-		if(!cursorElem){
-			cursorElem = document.createElement('div');
-			cursorElem.style.border = '2px blue solid';
-			cursorElem.style.pointerEvents = 'none';
-			table.appendChild(cursorElem);
-		}
+		cursorElem.style.display = 'block';
 		cursorElem.style.position = 'absolute';
 		cursorElem.style.top = (tilesize * vy) + 'px';
 		cursorElem.style.left = (tilesize * vx) + 'px';
