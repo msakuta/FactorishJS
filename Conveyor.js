@@ -224,8 +224,11 @@ inherit(TransportBelt, Structure, {
 	objectResponse: function(tile, o){
 		var vx = [-1, 0, 1, 0][this.rotation];
 		var vy = [0, -1, 0, 1][this.rotation];
-		var newx = Math.min(xsize * tilesize, Math.max(0, o.x + vx));
-		var newy = Math.min(ysize * tilesize, Math.max(0, o.y + vy));
+		var ax = this.rotation % 2 === 1 ? Math.floor((o.x) / tilesize) * tilesize + tilesize / 2 : o.x;
+		var ay = this.rotation % 2 === 0 ? Math.floor((o.y) / tilesize) * tilesize + tilesize / 2 : o.y;
+		var newx = Math.min(xsize * tilesize, Math.max(0, ax + vx));
+		var newy = Math.min(ysize * tilesize, Math.max(0, ay + vy));
+		var idx = board.indexOf(tile);
 		if(!movableTile(newx, newy) || hitCheck(newx, newy, o))
 			return;
 		o.x = newx;
