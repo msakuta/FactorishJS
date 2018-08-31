@@ -38,6 +38,7 @@ var textType = isIE() ? "Text" : "text/plain";
 
 var toolBarElem;
 var toolElems = [];
+var toolOverlays = [];
 var toolCursorElem;
 
 // Placeholder object for player
@@ -63,8 +64,7 @@ player.addItem = function(item){
 			this.inventory[item.type] = ret;
 		else
 			this.inventory[item.type] += ret;
-		if(inventoryTarget === this && inventoryElem.style.display !== 'none')
-			updateInventory();
+		updatePlayer();
 		return ret;
 	}
 	else
@@ -76,8 +76,7 @@ player.removeItem = function(itemType, amount){
 	this.inventory[itemType] -= amount;
 	if(this.inventory[itemType] <= 0)
 		delete this.inventory[itemType];
-	if(inventoryTarget === this && inventoryElem.style.display !== 'none')
-		updateInventory();
+	updatePlayer();
 };
 
 player.inventoryVolume = function(){
@@ -1980,6 +1979,7 @@ function createElements(){
 
 	// Reset the state before initializing toolbar elements
 	toolElems = [];
+	toolOverlays = [];
 	currentTool = -1;
 	currentRotation = 0;
 
@@ -1995,14 +1995,26 @@ function createElements(){
 	toolBarElem.style.height = (tilesize + 8) + 'px';
 	container.appendChild(toolBarElem);
 	for(var i = 0; i < toolDefs.length; i++){
+		var toolContainer = document.createElement('span');
+		toolContainer.style.position = 'absolute';
+		toolContainer.style.display = 'inline-block';
+		toolContainer.style.width = '31px';
+		toolContainer.style.height = '31px';
+		toolContainer.style.top = '4px';
+		toolContainer.style.left = (32.0 * i + 4) + 'px';
+		toolContainer.style.border = '1px black solid';
+
+		// Overlay for item count
+		var overlay = document.createElement('div');
+		toolOverlays.push(overlay);
+		overlay.setAttribute('class', 'overlay noselect');
+		overlay.innerHTML = '0';
+
 		var toolElem = document.createElement("div");
 		toolElems.push(toolElem);
 		toolElem.style.width = '31px';
 		toolElem.style.height = '31px';
 		toolElem.style.position = 'absolute';
-		toolElem.style.top = '4px';
-		toolElem.style.left = (32.0 * i + 4) + 'px';
-		toolElem.style.border = '1px black solid';
 		toolElem.style.textAlign = 'center';
 		toolElem.onmousedown = function(e){
 			selectTool(toolElems.indexOf(this));
@@ -2025,7 +2037,14 @@ function createElements(){
 		toolElem.onmouseleave = function(e){
 			toolTip.style.display = 'none';
 		};
-		toolBarElem.appendChild(toolElem);
+
+		// Note that toolElem is not the direct child of toolBarElem.
+		// toolContainer has inserted in between the parent and child in order to
+		// display overlay text for item count.
+		toolContainer.appendChild(toolElem);
+		toolContainer.appendChild(overlay);
+		toolBarElem.appendChild(toolContainer);
+
 		// Disable text selection
 		toolElem.setAttribute("class", "noselect");
 		toolDefs[i].prototype.draw(toolElem, true);
@@ -2327,6 +2346,20 @@ function updateInventoryInt(elem, owner, icons){
 }
 
 function updatePlayer(){
+	// Note that item count text is decoupled from toolElems, so you don't need to update the text
+	// when updateTool() is called.  Instead, we want to update whenever the player's inventory has
+	// changed, potentially changing the item count.
+	if(player.inventory){
+		for(var i in toolDefs){
+			var name = toolDefs[i].prototype.name;
+			var count = 0;
+			if(name in player.inventory){
+				count = player.inventory[name];
+			}
+			toolOverlays[i].innerHTML = count;
+		}
+	}
+
 	updateInventoryInt(playerInventoryElem, player, playerInventoryIcons);
 }
 
