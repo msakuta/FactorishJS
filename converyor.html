@@ -173,7 +173,7 @@
 		</div>
 		<div id="points"></div>
 		<hr>
-		Auto Save Content: <textarea id="autoSaveText" cols="100" rows="10" type="text" value=""></textarea><br>
+		Auto Save Content: <textarea id="autoSaveText" cols="80" rows="10" type="text" value=""></textarea><br>
 		<input type="button" value="get state (Save)" onclick="document.getElementById('saveText').value = Conveyor.serialize()">
 		<input type="button" value="set state (Load)" onclick="Conveyor.deserialize(document.getElementById('saveText').value)">
 		<input id="saveText" type="text" value="">

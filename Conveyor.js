@@ -1819,6 +1819,10 @@ function updateCursorGhost(){
 }
 
 function createElements(){
+	// First, change the width of the body element to fit everything in the game inside it.
+	var body = document.getElementsByTagName("body")[0];
+	body.style.width = (tableMargin + viewPortWidth * tilesize + tableMargin + miniMapSize + tableMargin) + 'px';
+
 	tileElems = new Array(viewPortWidth * viewPortHeight);
 
 	// The containers are nested so that the inner container can be easily
