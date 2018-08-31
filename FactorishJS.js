@@ -1602,7 +1602,7 @@ window.addEventListener("load", function(){
 	viewPortHeight = 12;
 
 	if(typeof(Storage) !== "undefined"){
-		deserialize(localStorage.getItem("ConveyorGameSave"));
+		deserialize(localStorage.getItem("FactorishJSGameSave"));
 	}
 	else{
 		generateBoard();
@@ -2792,7 +2792,7 @@ function run(){
 		// Check for localStorage
 		if(typeof(Storage) !== "undefined"){
 			var serialData = serialize();
-			localStorage.setItem("ConveyorGameSave", serialData);
+			localStorage.setItem("FactorishJSGameSave", serialData);
 			//this.onAutoSave(serialData);
 			var autoSaveElem = document.getElementById("autoSaveText");
 			if(autoSaveElem){
