@@ -35,6 +35,9 @@ var tilesize = 32;
 var objsize = tilesize / 3;
 var objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
 var textType = isIE() ? "Text" : "text/plain";
+var cursorZIndex = 900;
+var windowZIndex = 1000;
+var tooltipZIndex = 10000;
 
 var toolBarElem;
 var toolElems = [];
@@ -196,6 +199,15 @@ Structure.prototype.output = function(){return false};
 /// @returns Available connections to adjacent cells in a bitfield, 0 - left, 1 - top, 2 - right, 3 - bottom.
 Structure.prototype.connection = function(){return 0};
 
+Structure.prototype.getSize = function(){
+	return [1, 1];
+};
+
+Structure.prototype.rotate = function(){
+	this.rotation = (this.rotation + 1) % 4;
+	updateTile(this.tile);
+};
+
 // Transport belt
 function TransportBelt(){}
 inherit(TransportBelt, Structure, {
@@ -245,6 +257,101 @@ inherit(TransportBelt, Structure, {
 		return true;
 	},
 });
+
+
+function Splitter(){
+	TransportBelt.call(this);
+	this.direction = false;
+}
+inherit(Splitter, TransportBelt, {
+	name: "Splitter",
+
+	objectResponse: function(tile, o){
+		var vx = [-1, 0, 1, 0][this.rotation];
+		var vy = [0, -1, 0, 1][this.rotation];
+		var ax = this.rotation % 2 === 1 ? Math.floor((o.x) / tilesize) * tilesize + tilesize / 2 : o.x;
+		var ay = this.rotation % 2 === 0 ? Math.floor((o.y) / tilesize) * tilesize + tilesize / 2 : o.y;
+		var idx = board.indexOf(this.tile);
+		var tx = idx % ysize;
+		var ty = Math.floor(idx / ysize);
+		var halftilesize = tilesize / 2;
+		var postdirection = false;
+		if(this.rotation % 2 === 0){
+			// Detect the point where the item passes over the mid point of this entity.
+			if((Math.floor((ax + halftilesize) / tilesize) !== Math.floor((ax + vx + halftilesize) / tilesize))){
+				ay = (ty + this.direction) * tilesize + tilesize / 2;
+				postdirection = true; // Signal to switch direction
+			}
+		}
+		else if((Math.floor((ay + halftilesize) / tilesize) !== Math.floor((ay + vy + halftilesize) / tilesize))){
+			ax = (tx + this.direction) * tilesize + tilesize / 2;
+			postdirection = true; // Signal to switch direction
+		}
+		var newx = Math.min(xsize * tilesize, Math.max(0, ax + vx));
+		var newy = Math.min(ysize * tilesize, Math.max(0, ay + vy));
+		if(!movableTile(newx, newy) || hitCheck(newx, newy, o))
+			return;
+		o.x = newx;
+		o.y = newy;
+
+		// Alternate direction if an item passed over the splitter
+		if(postdirection)
+			this.direction = (this.direction + 1) % 2;
+
+		positionObject(o);
+	},
+
+	draw: function(tileElem, isToolBar){
+		var rot = this.rotation ? this.rotation : 0;
+		var height = isToolBar ? tilesize : tilesize * 2;
+		var transform = 'rotate(' + (rot * 90 + 180) + 'deg)';
+		if(!isToolBar && rot % 2 !== 0)
+			transform = 'translate(50%, -25%) ' + transform;
+		var imgElem = document.createElement('div');
+		imgElem.style.position = 'absolute';
+		imgElem.style.left = '0px';
+		imgElem.style.top = '0px';
+		imgElem.style.width = tilesize + 'px';
+		imgElem.style.height = height + 'px';
+		imgElem.style.backgroundImage = 'url("img/transport.png")';
+		imgElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
+		imgElem.style.transform = transform;
+		imgElem.style.borderStyle = 'none';
+		imgElem.style.zIndex = 1;
+		tileElem.appendChild(imgElem);
+		this.beltImgElem = imgElem;
+
+		imgElem = document.createElement('div');
+		imgElem.style.position = 'absolute';
+		imgElem.style.left = '0px';
+		imgElem.style.top = '0px';
+		imgElem.style.width = tilesize + 'px';
+		imgElem.style.height = height + 'px';
+		imgElem.style.backgroundImage = 'url("img/splitter.png")';
+		imgElem.style.backgroundPosition = '0px 0';
+		imgElem.style.transform = transform;
+		imgElem.style.borderStyle = 'none';
+		imgElem.style.zIndex = 2;
+		tileElem.appendChild(imgElem);
+		this.imgElem = imgElem;
+	},
+
+	frameProc: function(){
+		var imgElem = this.beltImgElem;
+		imgElem.style.backgroundPosition = simstep % 32 + 'px 0';
+	},
+
+	getSize: function(){
+		return this.rotation % 2 === 0 ? [1, 2] : [2, 1];
+	},
+
+	rotate: function(){
+		// Can only do 180 degrees turn
+		this.rotation = (this.rotation + 2) % 4;
+		updateTile(this.tile);
+	}
+});
+
 
 // Inserter
 function Inserter(){
@@ -868,6 +975,11 @@ inherit(Assembler, Factory, {
 				time: 20,
 			},
 			{
+				input: {'Transport Belt': 2, 'Gear': 2},
+				output: {'Splitter': 1},
+				time: 40,
+			},
+			{
 				input: {'Iron Plate': 5},
 				output: {'Steel Plate': 1},
 				time: 30,
@@ -1348,6 +1460,7 @@ inherit(SteamEngine, FluidContainer, {
 var toolDefs = [
 	TransportBelt,
 	Inserter,
+	Splitter,
 	Chest,
 	OreMine,
 	Furnace,
@@ -1406,8 +1519,7 @@ function rotate(){
 	else if(selectedCoords !== null){
 		var tile = board[selectedCoords[0] + selectedCoords[1] * ysize];
 		if(tile.structure){
-			tile.structure.rotation = (tile.structure.rotation + 1) % 4;
-			updateTile(tile);
+			tile.structure.rotate();
 		}
 	}
 }
@@ -1572,10 +1684,10 @@ function bringToTop(elem){
 		windowOrder.splice(oldIdx, 1);
 		windowOrder.push(elem);
 		for(var i = 0; i < windowOrder.length; i++)
-			windowOrder[i].style.zIndex = i;
+			windowOrder[i].style.zIndex = i + windowZIndex;
 	}
 	var mousecaptorElem = document.getElementById('mousecaptor');
-	mousecaptorElem.style.zIndex = i; // The mouse capture element comes on top of all other windows
+	mousecaptorElem.style.zIndex = i + windowZIndex; // The mouse capture element comes on top of all other windows
 }
 
 var toolTip;
@@ -1593,7 +1705,7 @@ window.addEventListener("load", function(){
 	toolTip.setAttribute('id', 'tooltip');
 	toolTip.setAttribute('class', 'noselect');
 	toolTip.innerHTML = 'hello there';
-	toolTip.style.zIndex = 100; // Usually comes on top of all the other elements
+	toolTip.style.zIndex = tooltipZIndex; // Usually comes on top of all the other elements
 	toolTip.style.display = 'none'; // Initially invisible
 	var containerElem = document.getElementById('container');
 	containerElem.appendChild(toolTip);
@@ -1848,7 +1960,7 @@ function createElements(){
 	cursorElem.style.border = '2px blue solid';
 	cursorElem.style.pointerEvents = 'none';
 	cursorElem.style.display = 'none';
-	cursorElem.style.zIndex = 100;
+	cursorElem.style.zIndex = cursorZIndex;
 	table.appendChild(cursorElem);
 	// Cursor ghost is a container for a preview of which structure will be built.
 	cursorGhostElem = document.createElement('div');
@@ -2540,6 +2652,25 @@ function newblock(i){
 
 var serialNo = 0;
 
+function findStructure(tx, ty){
+	// Scan from negative side to find potential structure that is covering
+	// this tile.  The starting negative offset should be the largest size
+	// of all structures.
+	for(var ix = -1; ix <= 0; ix++){
+		for(var iy = -1; iy <= 0; iy++){
+			if(xsize <= tx + ix || ysize <= ty + iy)
+				continue;
+			var istruct = board[(tx + ix) + (ty + iy) * ysize].structure;
+			if(istruct){
+				var issize = istruct.getSize();
+				if(0 < ix + issize[0] && 0 < iy + issize[1])
+					return istruct;
+			}
+		}
+	}
+	return null;
+}
+
 /// Check whether given tile allow objects on it, e.g. transport belts
 function movableTile(x, y){
 	var tx = Math.floor(x / tilesize);
@@ -2547,9 +2678,10 @@ function movableTile(x, y){
 	if(tx < 0 || xsize < tx || ty < 0 || ysize < ty || isNaN(tx) || isNaN(ty))
 		return false;
 	// Ojects should not be placed on an empty tile
-	if(!board[tx + ty * ysize].structure)
+	var struct = findStructure(tx, ty);
+	if(!struct)
 		return false;
-	return board[tx + ty * ysize].structure.movable();
+	return struct.movable();
 }
 
 /// Check whether given coordinates hits some object
@@ -2605,6 +2737,8 @@ DropItem.prototype.addElem = function(){
 	// we're adding a structure to a tile.
 	this.elem.style.pointerEvents = 'none';
 	this.elem.setAttribute('class', 'noselect');
+	// Dropped items have always 5 z-index
+	this.elem.style.zIndex = 5;
 	positionObject(this);
 	table.appendChild(this.elem);
 }
@@ -2646,6 +2780,8 @@ function getImageFile(type){
 		return 'img/circuit.png';
 	case 'Transport Belt':
 		return 'img/transport.png';
+	case 'Splitter':
+		return 'img/splitter.png';
 	case 'Inserter':
 		return 'img/inserter-base.png';
 	case 'Chest':
@@ -2771,8 +2907,9 @@ function run(){
 		var tx = Math.floor(o.x / tilesize);
 		var ty = Math.floor(o.y / tilesize);
 		var tile = board[tx + ty * ysize];
-		if(tile.structure)
-			tile.structure.objectResponse(tile, o);
+		var struct = findStructure(tx, ty);
+		if(struct)
+			struct.objectResponse(tile, o);
 	}
 
 	for(var ty = 0; ty < ysize; ty++){
