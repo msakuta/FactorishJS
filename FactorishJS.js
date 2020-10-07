@@ -218,7 +218,7 @@ inherit(TransportBelt, Structure, {
 		return 'Transports items on ground';
 	},
 
-	draw: function(tileElem, isToolBar){
+	draw: function(tileElem, isToolBar, animation){
 		var imgElem = document.createElement('div');
 		imgElem.style.position = 'absolute';
 		imgElem.style.left = '0px';
@@ -229,7 +229,23 @@ inherit(TransportBelt, Structure, {
 		imgElem.style.transform = 'rotate(' + (this.rotation * 90 + 180) + 'deg)';
 		imgElem.style.borderStyle = 'none';
 		if(!isToolBar){
-			imgElem.className = 'scrollBelt';
+			if(imgElem.animate){
+				this.animation = imgElem.animate(
+					[
+						{backgroundPositionX: '0px'},
+						{backgroundPositionX: '32px'},
+					], {
+						duration: 1500,
+						iterations: Infinity,
+						fill: 'both'
+					});
+				// Synchronize animation
+				if(animation){
+					this.animation.currentTime = animation.currentTime;
+				}
+			}
+			else  // For browsers that do not support Web Animations
+				imgElem.className = "scrollBelt";
 		}
 		tileElem.appendChild(imgElem);
 		this.imgElem = imgElem;
@@ -328,7 +344,7 @@ inherit(Splitter, TransportBelt, {
 		}
 	},
 
-	draw: function(tileElem, isToolBar){
+	draw: function(tileElem, isToolBar, animation){
 		var rot = this.rotation ? this.rotation : 0;
 		var height = isToolBar ? tilesize : tilesize * 2;
 		var transform = 'rotate(' + (rot * 90 + 180) + 'deg)';
@@ -345,8 +361,25 @@ inherit(Splitter, TransportBelt, {
 		imgElem.style.transform = transform;
 		imgElem.style.borderStyle = 'none';
 		imgElem.style.zIndex = 1;
-		if(!isToolBar)
-			imgElem.className = "scrollBelt";
+		if(!isToolBar){
+			if(imgElem.animate){
+				this.animation = imgElem.animate(
+					[
+						{backgroundPositionX: '0px'},
+						{backgroundPositionX: '32px'},
+					], {
+						duration: 1500,
+						iterations: Infinity,
+						fill: 'both'
+					});
+				// Synchronize animation
+				if(animation){
+					this.animation.currentTime = animation.currentTime;
+				}
+			}
+			else // For browsers that do not support Web Animations
+				imgElem.className = "scrollBelt";
+		}
 		tileElem.appendChild(imgElem);
 		this.beltImgElem = imgElem;
 
@@ -1824,7 +1857,8 @@ function getTileElem(x, y){
 }
 
 /// Update single tile graphics to match internal data
-function updateTile(tile){
+/// @param animation an existing HTML element's Animation object, used to synchronize
+function updateTile(tile, animation){
 	var idx = board.indexOf(tile);
 	var c = idx % ysize - scrollPos[0];
 	var r = Math.floor(idx / ysize) - scrollPos[1];
@@ -1870,7 +1904,7 @@ function updateTile(tile){
 	if(tile.structure === null)
 		/*tileElem.innerHTML = ""*/;
 	else{
-		tile.structure.draw(tileElem, false);
+		tile.structure.draw(tileElem, false, animation);
 	}
 }
 
@@ -2027,12 +2061,29 @@ function createElements(){
 				else if(0 <= currentTool && currentTool < toolDefs.length){
 					var tool = toolDefs[currentTool];
 
+					/// Get Animation object from any of the existing tiles
+					/// TODO: if there are animated structures other than transport belts, we may want to get
+					///       the animation for each of them.
+					function getAnyAnimation(){
+						for(var iy = 0; iy < viewPortHeight; iy++){
+							for(var ix = 0; ix < viewPortWidth; ix++){
+								var j = ix + iy * viewPortWidth;
+								var jc = j % viewPortWidth + scrollPos[0];
+								var jr = Math.floor(j / viewPortWidth) + scrollPos[1];
+								var refreshTile = board[jc + jr * ysize];
+								if(refreshTile.structure && refreshTile.structure.animation)
+									return refreshTile.structure.animation;
+							}
+						}
+						return null;
+					}
+
 					// Prevent resetting structure's progress and inventory if
 					// the user clicks on a structure with the same tool type.
 					// But update the rotation.
 					if(tile.structure && tool.prototype.name === tile.structure.name){
 						tile.structure.rotation = currentRotation;
-						updateTile(tile);
+						updateTile(tile, getAnyAnimation());
 						return;
 					}
 
@@ -2045,7 +2096,7 @@ function createElements(){
 					tile.structure = new tool;
 					tile.structure.tile = board[c + r * ysize];
 					tile.structure.rotation = currentRotation;
-					addMinimapSymbol(c, r, tile);
+					var animation = getAnyAnimation();
 					if(--player.inventory[tool.prototype.name] === 0)
 						delete player.inventory[tool.prototype.name];
 					updatePlayer();
@@ -2055,7 +2106,7 @@ function createElements(){
 					// If mouse button is clicked without any tool selected, try to open it (WIP).
 					showInventory(tile);
 				}
-				updateTile(tile);
+				updateTile(tile, animation);
 				for(var i = 0; i < 4; i++){
 					if(connection & (1 << i)){
 						var x = c + [-1,0,1,0][i];
