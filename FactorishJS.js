@@ -218,7 +218,7 @@ inherit(TransportBelt, Structure, {
 		return 'Transports items on ground';
 	},
 
-	draw: function(tileElem){
+	draw: function(tileElem, isToolBar){
 		var imgElem = document.createElement('div');
 		imgElem.style.position = 'absolute';
 		imgElem.style.left = '0px';
@@ -226,9 +226,11 @@ inherit(TransportBelt, Structure, {
 		imgElem.style.width = tilesize + 'px';
 		imgElem.style.height = tilesize + 'px';
 		imgElem.style.backgroundImage = 'url("img/transport.png")';
-		imgElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
 		imgElem.style.transform = 'rotate(' + (this.rotation * 90 + 180) + 'deg)';
 		imgElem.style.borderStyle = 'none';
+		if(!isToolBar){
+			imgElem.className = 'scrollBelt';
+		}
 		tileElem.appendChild(imgElem);
 		this.imgElem = imgElem;
 	},
@@ -249,8 +251,8 @@ inherit(TransportBelt, Structure, {
 	},
 
 	frameProc: function(){
-		var imgElem = this.imgElem;
-		imgElem.style.backgroundPosition = simstep % 32 + 'px 0';
+		// var imgElem = this.imgElem;
+		// imgElem.style.backgroundPosition = simstep % 32 + 'px 0';
 	},
 
 	movable: function(tile){
@@ -339,10 +341,12 @@ inherit(Splitter, TransportBelt, {
 		imgElem.style.width = tilesize + 'px';
 		imgElem.style.height = height + 'px';
 		imgElem.style.backgroundImage = 'url("img/transport.png")';
-		imgElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
+		// imgElem.style.backgroundPosition = (simstep) % 32 + 'px 0';
 		imgElem.style.transform = transform;
 		imgElem.style.borderStyle = 'none';
 		imgElem.style.zIndex = 1;
+		if(!isToolBar)
+			imgElem.className = "scrollBelt";
 		tileElem.appendChild(imgElem);
 		this.beltImgElem = imgElem;
 
@@ -362,8 +366,8 @@ inherit(Splitter, TransportBelt, {
 	},
 
 	frameProc: function(){
-		var imgElem = this.beltImgElem;
-		imgElem.style.backgroundPosition = simstep % 32 + 'px 0';
+		// var imgElem = this.beltImgElem;
+		// imgElem.style.backgroundPosition = simstep % 32 + 'px 0';
 	},
 
 	getSize: function(){

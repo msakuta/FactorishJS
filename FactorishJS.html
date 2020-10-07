@@ -90,6 +90,19 @@
 				line-height: 120%;
 			}
 
+			@keyframes scrollBeltFrames {
+				from {background-position-x: 0px;}
+				to {background-position-x: 32px;}
+			}
+
+			.scrollBelt{
+				background-position-x: 0px;
+				animation-name: scrollBeltFrames;
+				animation-duration: 1s;
+				animation-iteration-count: infinite;
+				animation-timing-function: linear;
+			}
+
 			div.closeButton{
 				position: absolute;
 				width: 16px;
