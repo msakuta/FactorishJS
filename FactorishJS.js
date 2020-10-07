@@ -783,7 +783,8 @@ inherit(Factory, Container, {
 
 			if(this.processing){
 				// Proceed only if we have sufficient energy in the buffer.
-				var progress = this.isBurner() && this.power !== undefined && this.recipe.powerCost !== undefined ? Math.min(this.power / this.recipe.powerCost, 1) : 1;
+				var progress = this.isBurner() && this.power !== undefined && this.recipe.powerCost !== undefined ?
+					Math.min(this.power / this.recipe.powerCost, 1) : 1;
 
 				if(this.progressCallback)
 					progress = this.progressCallback(progress);
@@ -797,7 +798,7 @@ inherit(Factory, Container, {
 							updateInventory();
 					}
 				}
-				else{
+				else if(0 < progress){
 					this.cooldown -= progress;
 					if(this.power !== undefined && this.recipe.powerCost !== undefined)
 						this.power -= progress * this.recipe.powerCost;
@@ -881,7 +882,11 @@ inherit(Furnace, Factory, {
 			return false;
 		}).call(this))
 			this.recipe = null;
-		return Factory.prototype.frameProc.call(this, tile);
+		var ret = Factory.prototype.frameProc.call(this, tile);
+		if(this.recipe && this.processing && 0 < this.power)
+			this.elem.style.backgroundPositionX = ((Math.floor(simstep / 2) % 2 + 1) * 32) + 'px';
+		else
+			this.elem.style.backgroundPositionX = '0px';
 	},
 
 	input: function(o){
@@ -903,15 +908,18 @@ inherit(Furnace, Factory, {
 	},
 
 	draw: function(tileElem, isToolBar){
-		var imgElem = document.createElement('img');
-		imgElem.src = 'img/furnace.png';
+		var imgElem = document.createElement('div');
+		imgElem.style.backgroundImage = 'url("img/furnace.png")';
 		imgElem.style.left = '0px';
 		imgElem.style.top = '0px';
+		imgElem.style.width = '32px';
+		imgElem.style.height = '32px';
 		imgElem.style.position = 'absolute';
 		tileElem.appendChild(imgElem);
 		if(!isToolBar){
 			this.addFuelAlarm(tileElem);
 		}
+		this.elem = imgElem;
 	},
 
 	isBurner: function(){return true;}
