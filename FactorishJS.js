@@ -281,13 +281,11 @@ inherit(Splitter, TransportBelt, {
 			if((Math.floor((ax + halftilesize) / tilesize) !== Math.floor((ax + vx + halftilesize) / tilesize))){
 				ay = (ty + this.direction) * tilesize + tilesize / 2;
 				postdirection = true; // Signal to switch direction
-				o.elem.style.border = "solid 1px blue";
 			}
 		}
 		else if((Math.floor((ay + halftilesize) / tilesize) !== Math.floor((ay + vy + halftilesize) / tilesize))){
 			ax = (tx + this.direction) * tilesize + tilesize / 2;
 			postdirection = true; // Signal to switch direction
-			o.elem.style.border = "solid 1px blue";
 		}
 
 		function tryMove(ax, ay){
@@ -307,32 +305,24 @@ inherit(Splitter, TransportBelt, {
 			// Alternate direction if an item passed over the splitter
 			if(postdirection){
 				this.direction = (this.direction + 1) % 2;
-				console.log(`switch side by ${o.id}`)
 			}
 			return;
 		}
 
-		function checkMovable(ax, ay, tx, ty, movableTile, hitCheck, tryMove){
+		function checkMovable(ax, ay, tx, ty, tryMove){
 			var objx = ax - Math.floor(ax / tilesize) * tilesize;
 			if(tilesize / 4 < objx && objx < tilesize * 3 / 4){
-				o.elem.style.border = "solid 1px red";
 				var objSide = Math.floor(ay / tilesize) - ty;
 				var newy = (ty + !objSide) * tilesize + tilesize / 2;
 				tryMove(ax, newy);
 			}
-			else
-				o.elem.style.border = "";
 		}
 
 		if(this.rotation % 2 === 0){
-			checkMovable(ax, ay, tx, ty, function(x, y){ return movableTile(x, y); },
-				function(x, y, o){ return hitCheck(x, y, o); },
-				function(x, y){ return tryMove(x, y); });
+			checkMovable(ax, ay, tx, ty, function(x, y){ return tryMove(x, y); });
 		}
 		else{
-			checkMovable(ay, ax, ty, tx, function(x, y){ return movableTile(y, x); },
-				function(x, y, o){ return hitCheck(y, x, o); },
-				function(x, y){ return tryMove(y, x); });
+			checkMovable(ay, ax, ty, tx, function(x, y){ return tryMove(y, x); });
 		}
 	},
 
