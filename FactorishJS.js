@@ -2410,11 +2410,15 @@ function updateInfo(){
 }
 
 function generateItemImage(i, iconSize, count){
-	var img = document.createElement('img');
-	img.src = getImageFile(i);
+	var img = document.createElement('div');
+	img.style.backgroundImage = 'url(' + getImageFile(i) + ')';
 	var size = iconSize ? 32 : objViewSize;
 	img.style.width = size + 'px';
 	img.style.height = size + 'px';
+	img.style.backgroundSize = size + 'px ' + size + 'px';
+	img.style.display = 'inline-block';
+	if(i === 'Furnace')
+		img.style.backgroundSize = size * 3 + 'px ' + size + 'px';
 	img.setAttribute('draggable', 'false');
 	if(iconSize && count){
 		var container = document.createElement('span');
