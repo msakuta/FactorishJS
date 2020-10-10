@@ -2411,14 +2411,17 @@ function updateInfo(){
 
 function generateItemImage(i, iconSize, count){
 	var img = document.createElement('div');
-	img.style.backgroundImage = 'url(' + getImageFile(i) + ')';
+	var imageFile = getImageFile(i);
+	img.style.backgroundImage = 'url(' + (imageFile instanceof Array ?
+		imageFile[0] : imageFile) + ')';
 	var size = iconSize ? 32 : objViewSize;
 	img.style.width = size + 'px';
 	img.style.height = size + 'px';
-	img.style.backgroundSize = size + 'px ' + size + 'px';
 	img.style.display = 'inline-block';
-	if(i === 'Furnace')
-		img.style.backgroundSize = size * 3 + 'px ' + size + 'px';
+	if(imageFile instanceof Array)
+		img.style.backgroundSize = size * imageFile[1] + 'px ' + size + 'px';
+	else
+		img.style.backgroundSize = size + 'px ' + size + 'px';
 	img.setAttribute('draggable', 'false');
 	if(iconSize && count){
 		var container = document.createElement('span');
@@ -2761,11 +2764,12 @@ DropItem.prototype.deserialize = function(obj){
 DropItem.prototype.addElem = function(){
 	this.elem = document.createElement('div');
 	var file = getImageFile(this.type);
-	if(file)
-		this.elem.style.backgroundImage = 'url("' + file + '")';
+	if(file){
+		this.elem.style.backgroundImage = 'url("' + (file instanceof Array ? file[0] : file) + '")';
+	}
 	else
 		this.elem.innerHTML = type;
-	this.elem.style.backgroundSize = objViewSize + 'px ' + objViewSize + 'px';
+	this.elem.style.backgroundSize = objViewSize * (file instanceof Array ? file[1] : 1) + 'px ' + objViewSize + 'px';
 	// Debug graphic for bounding box
 //			this.elem.style.border = '1px solid';
 	this.elem.style.width = objViewSize + 'px';
@@ -2827,7 +2831,7 @@ function getImageFile(type){
 	case 'Ore Mine':
 		return "img/mine.png";
 	case 'Furnace':
-		return "img/furnace.png";
+		return ["img/furnace.png", 3];
 	case 'Assembler':
 		return "img/assembler.png";
 	case 'Water Well':
