@@ -1,10 +1,9 @@
 mod utils;
+mod perlin_noise;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, ImageBitmap};
-use std::cell::RefCell;
-use std::rc::Rc;
+use web_sys::{HtmlCanvasElement, HtmlImageElement, CanvasRenderingContext2d, ImageBitmap, Element};
 
 #[wasm_bindgen]
 extern "C" {
@@ -47,13 +46,32 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
         .expect("should register `requestAnimationFrame` OK");
 }
 
+fn document() -> web_sys::Document {
+    window()
+        .document()
+        .expect("should have a document on window")
+}
+
+fn body() -> web_sys::HtmlElement {
+    document().body().expect("document should have a body")
+}
+
+#[derive(Copy, Clone)]
+struct Cell{
+    iron_ore: u32,
+}
+
 #[wasm_bindgen]
-struct FactorishState{
+pub struct FactorishState{
     delta_time: f64,
     sim_time: f64,
-    height: f64,
-    width: f64,
+    width: u32,
+    height: u32,
+    viewport_width: f64,
+    viewport_height: f64,
     image: Option<ImageBitmap>,
+    image_ore: Option<HtmlImageElement>,
+    board: Vec<Cell>,
     // vertex_shader: Option<WebGlShader>,
     // shader_program: Option<WebGlProgram>,
 }
@@ -64,10 +82,26 @@ impl FactorishState {
     pub fn new() -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
+        let width = 64;
+        let height = 64;
+
         Ok(FactorishState{delta_time: 0.1, sim_time: 0.0,
-            height: 0.,
-            width: 0.,
+            width,
+            height,
+            viewport_height: 0.,
+            viewport_width: 0.,
             image: None,
+            image_ore: None,
+            board: {
+                let mut ret = vec![Cell{iron_ore: 0}; (width * height) as usize];
+                for y in 0..height {
+                    for x in 0..width {
+                        ret[(x + y * width) as usize].iron_ore
+                         = ((perlin_noise::perlin_noise_pixel(x as f64, y as f64, 3) - 0.5) * 100.).max(0.) as u32;
+                    }
+                }
+                ret
+            }
             })
     }
 
@@ -80,9 +114,14 @@ impl FactorishState {
 
     #[wasm_bindgen]
     pub fn render_init(&mut self, canvas: HtmlCanvasElement, img: ImageBitmap) -> Result<(), JsValue> {
-        self.width = canvas.width() as f64;
-        self.height = canvas.height() as f64;
+        self.viewport_width = canvas.width() as f64;
+        self.viewport_height = canvas.height() as f64;
         self.image = Some(img);
+        let img = HtmlImageElement::new()?;
+        img.set_attribute("src", "img/iron.png");
+        img.style().set_property("display", "none")?;
+        body().append_child(&img);
+        self.image_ore = Some(img);
         Ok(())
     }
 
@@ -90,18 +129,25 @@ impl FactorishState {
     pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
         use std::f64;
 
-        context.clear_rect(0., 0., self.width, self.height);
+        context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
 
-        match self.image.as_ref() {
-            Some(img) => {
-                console_log!("width: {}", self.width);
-                for y in 0..self.height as u32 / 32 {
-                    for x in 0..self.width as u32 / 32 {
+        match (self.image.as_ref(), self.image_ore.as_ref()) {
+            (Some(img), Some(img_ore)) => {
+                for y in 0..self.viewport_height as u32 / 32 {
+                    for x in 0..self.viewport_width as u32 / 32 {
                         context.draw_image_with_image_bitmap(img, x as f64 * 32., y as f64 * 32.)?;
+                        let ore = self.board[(x + y * self.width) as usize].iron_ore;
+                        if 0 < ore {
+                            let idx = (ore / 10).min(3);
+                            // console_log!("x: {}, y: {}, idx: {}, ore: {}", x, y, idx, ore);
+                            context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                img_ore, (idx * 32) as f64, 0., 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
+                        }
                     }
                 }
+                console_log!("iron ore: {}", self.board.iter().fold(0, |accum, val| accum + val.iron_ore));
             }
-            None => {
+            _ => {
                 return Err(JsValue::from_str("image not available"));
             }
         }
