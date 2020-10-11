@@ -51,6 +51,9 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 #[derive(Copy, Clone)]
 struct FactorishState{
     delta_time: f64,
+    sim_time: f64,
+    // vertex_shader: Option<WebGlShader>,
+    // shader_program: Option<WebGlProgram>,
 }
 
 #[wasm_bindgen]
@@ -59,28 +62,34 @@ impl FactorishState {
     pub fn new() -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
-        Ok(FactorishState{delta_time: 0.1})
+        Ok(FactorishState{delta_time: 0.1, sim_time: 0.0,
+            //  vertex_shader: None, shader_program: None
+            })
     }
 
     #[wasm_bindgen]
     pub fn simulate(&mut self, delta_time: f64) {
-        console_log!("simulating delta_time {}", delta_time);
+        console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         self.delta_time = delta_time;
+        self.sim_time += delta_time;
     }
 
     #[wasm_bindgen]
-    pub fn render_init(&self, context: web_sys::WebGlRenderingContext) -> Result<(), JsValue> {
-            
+    pub fn render_init(&mut self, context: web_sys::WebGlRenderingContext) -> Result<(), JsValue> {
+
         let vert_shader = compile_shader(
             &context,
             WebGlRenderingContext::VERTEX_SHADER,
             r#"
             attribute vec4 position;
+            uniform mat4 transform;
             void main() {
                 gl_Position = position;
             }
         "#,
         )?;
+        // self.vertex_shader = Some(vert_shader);
+
         let frag_shader = compile_shader(
             &context,
             WebGlRenderingContext::FRAGMENT_SHADER,
@@ -92,6 +101,7 @@ impl FactorishState {
         )?;
         let program = link_program(&context, &vert_shader, &frag_shader)?;
         context.use_program(Some(&program));
+        // self.shader_program = Some(program);
         Ok(())
     }
 
@@ -128,6 +138,10 @@ impl FactorishState {
 
         context.clear_color(0.0, 0.0, 0.0, 1.0);
         context.clear(WebGlRenderingContext::COLOR_BUFFER_BIT);
+
+        // if let Some(transform) = context.get_uniform_location(self.shader_program.unwrap(), 'transform') {
+        //     transform
+        // }
 
         context.draw_arrays(
             WebGlRenderingContext::TRIANGLES,
