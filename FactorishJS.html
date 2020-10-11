@@ -193,15 +193,23 @@
 		await init();
 		let sim = new FactorishState();
 
+		const img = document.createElement('img');
+		img.src = "img/dirt.png";
+		img.style.display = "none";
+		document.body.appendChild(img);
+
+		const imageBitmap = await window.createImageBitmap(img);
+
 		const canvas = document.getElementById('canvas');
 		const canvasSize = canvas.getBoundingClientRect();
-		const ctx = canvas.getContext('webgl');
+		const ctx = canvas.getContext('2d');
 
-		sim.render_init(ctx);
+		sim.render_init(canvas, imageBitmap);
 
 		window.setInterval(function(){
 			sim.simulate(0.05);
-			sim.render(ctx);
+			let result = sim.render(ctx);
+			// console.log(result);
 		}, 50);
 		// simulate()
 	}

@@ -40,10 +40,7 @@ opt-level = "s"
 version = "0.3.4"
 features = [
     'CanvasRenderingContext2d',
-    'WebGlRenderingContext',
-    'WebGlBuffer',
-    'WebGlProgram',
-    'WebGlShader',
+    'ImageBitmap',
     'Element',
     'HtmlElement',
     'HtmlCanvasElement',
