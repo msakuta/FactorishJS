@@ -30,8 +30,8 @@ fn noise_pixel(x: f64, y: f64, bit: u32) -> f64 {
     return rs.next();
 }
 
-const fn makeCRCTable() -> [u8; 256] {
-    let mut crcTable = [0u8; 256];
+const fn make_crc_table() -> [u8; 256] {
+    let mut crc_table = [0u8; 256];
     let mut n = 0;
     while n < 256 {
         let mut c = n;
@@ -44,14 +44,14 @@ const fn makeCRCTable() -> [u8; 256] {
             };
             k += 1;
         }
-        crcTable[n] = c as u8;
+        crc_table[n] = c as u8;
         n += 1;
     }
-    crcTable
+    crc_table
 }
 
 fn crc32_gp(str: &[u32]) -> u32 {
-    let table = makeCRCTable();
+    let table = make_crc_table();
     let mut crc = 0xffffffff; //0 ^ (-1);
 
     for i in 0..str.len() {

@@ -180,9 +180,9 @@ impl FactorishState {
         self.image = Some(img);
         let load_image = |path| -> Result<_, JsValue> {
             let img = HtmlImageElement::new()?;
-            img.set_attribute("src", path);
+            img.set_attribute("src", path)?;
             img.style().set_property("display", "none")?;
-            body().append_child(&img);
+            body().append_child(&img)?;
             Ok(img)
         };
         self.image_ore = Some(load_image("img/iron.png")?);
@@ -225,7 +225,7 @@ impl FactorishState {
         }
 
         for structure in &self.structures {
-            structure.draw(&self, &context);
+            structure.draw(&self, &context)?;
         }
 
         Ok(())
