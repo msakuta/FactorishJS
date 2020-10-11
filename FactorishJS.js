@@ -887,6 +887,7 @@ inherit(Furnace, Factory, {
 			this.elem.style.backgroundPositionX = ((Math.floor(simstep / 2) % 2 + 1) * 32) + 'px';
 		else
 			this.elem.style.backgroundPositionX = '0px';
+		return ret;
 	},
 
 	input: function(o){
@@ -1337,15 +1338,18 @@ Boiler.prototype.desc = function(){
 }
 
 Boiler.prototype.draw = function(tileElem, isToolBar){
-	var imgElem = document.createElement('img');
-	imgElem.src = 'img/boiler.png';
+	var imgElem = document.createElement('div');
+	imgElem.style.backgroundImage = 'url(img/boiler.png)';
 	imgElem.style.left = '0px';
 	imgElem.style.top = '0px';
+	imgElem.style.width = '32px';
+	imgElem.style.height = '32px';
 	imgElem.style.position = 'absolute';
 	tileElem.appendChild(imgElem);
 	if(!isToolBar){
 		this.addFuelAlarm(tileElem);
 	}
+	this.elem = imgElem;
 	FluidContainer.prototype.draw.call(this, tileElem, isToolBar);
 };
 
@@ -1358,7 +1362,12 @@ Boiler.prototype.frameProc = function(tile){
 		time: 20,
 	};
 	FluidContainer.prototype.frameProc.call(this, tile);
-	Factory.prototype.frameProc.call(this, tile);
+	var ret = Factory.prototype.frameProc.call(this, tile);
+	if(this.recipe && this.processing && 0 < this.power)
+		this.elem.style.backgroundPositionX = ((Math.floor(simstep / 2) % 2 + 1) * 32) + 'px';
+	else
+		this.elem.style.backgroundPositionX = '0px';
+	return ret;
 }
 
 Boiler.prototype.isBurner = function(){return true;}
@@ -2837,7 +2846,7 @@ function getImageFile(type){
 	case 'Water Well':
 		return "img/waterwell.png";
 	case 'Boiler':
-		return "img/boiler.png";
+		return ["img/boiler.png", 3];
 	case 'Pipe':
 		return "img/pipe-item.png";
 	case 'SteamEngine':
