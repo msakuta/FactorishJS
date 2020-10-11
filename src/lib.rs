@@ -1,14 +1,16 @@
-mod utils;
 mod perlin_noise;
+mod utils;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{HtmlCanvasElement, HtmlImageElement, CanvasRenderingContext2d, ImageBitmap, Element};
+use web_sys::{
+    CanvasRenderingContext2d, Element, HtmlCanvasElement, HtmlImageElement, ImageBitmap,
+};
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
-    unsafe fn log(s: &str);
+    fn log(s: &str);
 }
 
 macro_rules! console_log {
@@ -27,7 +29,7 @@ macro_rules! console_log {
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[wasm_bindgen]
-extern {
+extern "C" {
     fn alert(s: &str);
 }
 
@@ -57,12 +59,12 @@ fn body() -> web_sys::HtmlElement {
 }
 
 #[derive(Copy, Clone)]
-struct Cell{
+struct Cell {
     iron_ore: u32,
 }
 
 #[wasm_bindgen]
-pub struct FactorishState{
+pub struct FactorishState {
     delta_time: f64,
     sim_time: f64,
     width: u32,
@@ -85,7 +87,9 @@ impl FactorishState {
         let width = 64;
         let height = 64;
 
-        Ok(FactorishState{delta_time: 0.1, sim_time: 0.0,
+        Ok(FactorishState {
+            delta_time: 0.1,
+            sim_time: 0.0,
             width,
             height,
             viewport_height: 0.,
@@ -93,16 +97,20 @@ impl FactorishState {
             image: None,
             image_ore: None,
             board: {
-                let mut ret = vec![Cell{iron_ore: 0}; (width * height) as usize];
+                let mut ret = vec![Cell { iron_ore: 0 }; (width * height) as usize];
                 for y in 0..height {
                     for x in 0..width {
-                        ret[(x + y * width) as usize].iron_ore
-                         = ((perlin_noise::perlin_noise_pixel(x as f64, y as f64, 3) - 0.5) * 100.).max(0.) as u32;
+                        ret[(x + y * width) as usize].iron_ore = ((perlin_noise::perlin_noise_pixel(
+                            x as f64, y as f64, 3,
+                        ) - 0.5)
+                            * 100.)
+                            .max(0.)
+                            as u32;
                     }
                 }
                 ret
-            }
-            })
+            },
+        })
     }
 
     #[wasm_bindgen]
@@ -113,7 +121,11 @@ impl FactorishState {
     }
 
     #[wasm_bindgen]
-    pub fn render_init(&mut self, canvas: HtmlCanvasElement, img: ImageBitmap) -> Result<(), JsValue> {
+    pub fn render_init(
+        &mut self,
+        canvas: HtmlCanvasElement,
+        img: ImageBitmap,
+    ) -> Result<(), JsValue> {
         self.viewport_width = canvas.width() as f64;
         self.viewport_height = canvas.height() as f64;
         self.image = Some(img);
@@ -135,7 +147,11 @@ impl FactorishState {
             (Some(img), Some(img_ore)) => {
                 for y in 0..self.viewport_height as u32 / 32 {
                     for x in 0..self.viewport_width as u32 / 32 {
-                        context.draw_image_with_image_bitmap(img, x as f64 * 32., y as f64 * 32.)?;
+                        context.draw_image_with_image_bitmap(
+                            img,
+                            x as f64 * 32.,
+                            y as f64 * 32.,
+                        )?;
                         let ore = self.board[(x + y * self.width) as usize].iron_ore;
                         if 0 < ore {
                             let idx = (ore / 10).min(3);
@@ -145,7 +161,10 @@ impl FactorishState {
                         }
                     }
                 }
-                console_log!("iron ore: {}", self.board.iter().fold(0, |accum, val| accum + val.iron_ore));
+                console_log!(
+                    "iron ore: {}",
+                    self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
+                );
             }
             _ => {
                 return Err(JsValue::from_str("image not available"));
