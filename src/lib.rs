@@ -3,9 +3,7 @@ mod utils;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{
-    CanvasRenderingContext2d, Element, HtmlCanvasElement, HtmlImageElement, ImageBitmap,
-};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageBitmap};
 
 #[wasm_bindgen]
 extern "C" {
@@ -63,6 +61,48 @@ struct Cell {
     iron_ore: u32,
 }
 
+trait Structure {
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue>;
+}
+
+struct TransportBelt {
+    x: i32,
+    y: i32,
+}
+
+impl Structure for TransportBelt {
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        match state.image_belt.as_ref() {
+            Some(img) => {
+                for i in 0..2 {
+                    context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                        img,
+                        i as f64 * 32. - (state.sim_time * 16.) % 32.,
+                        0.,
+                        32.,
+                        32.,
+                        self.x as f64 * 32.,
+                        self.y as f64 * 32.,
+                        32.,
+                        32.,
+                    )?;
+                }
+            }
+            None => return Err(JsValue::from_str("belt image not available")),
+        }
+
+        Ok(())
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     delta_time: f64,
@@ -71,9 +111,12 @@ pub struct FactorishState {
     height: u32,
     viewport_width: f64,
     viewport_height: f64,
+    board: Vec<Cell>,
+    structures: Vec<TransportBelt>,
+
     image: Option<ImageBitmap>,
     image_ore: Option<HtmlImageElement>,
-    board: Vec<Cell>,
+    image_belt: Option<HtmlImageElement>,
     // vertex_shader: Option<WebGlShader>,
     // shader_program: Option<WebGlProgram>,
 }
@@ -96,6 +139,7 @@ impl FactorishState {
             viewport_width: 0.,
             image: None,
             image_ore: None,
+            image_belt: None,
             board: {
                 let mut ret = vec![Cell { iron_ore: 0 }; (width * height) as usize];
                 for y in 0..height {
@@ -110,6 +154,11 @@ impl FactorishState {
                 }
                 ret
             },
+            structures: vec![
+                TransportBelt { x: 10, y: 5 },
+                TransportBelt { x: 11, y: 5 },
+                TransportBelt { x: 12, y: 5 },
+            ],
         })
     }
 
@@ -129,11 +178,15 @@ impl FactorishState {
         self.viewport_width = canvas.width() as f64;
         self.viewport_height = canvas.height() as f64;
         self.image = Some(img);
-        let img = HtmlImageElement::new()?;
-        img.set_attribute("src", "img/iron.png");
-        img.style().set_property("display", "none")?;
-        body().append_child(&img);
-        self.image_ore = Some(img);
+        let load_image = |path| -> Result<_, JsValue> {
+            let img = HtmlImageElement::new()?;
+            img.set_attribute("src", path);
+            img.style().set_property("display", "none")?;
+            body().append_child(&img);
+            Ok(img)
+        };
+        self.image_ore = Some(load_image("img/iron.png")?);
+        self.image_belt = Some(load_image("img/transport.png")?);
         Ok(())
     }
 
@@ -143,8 +196,8 @@ impl FactorishState {
 
         context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
 
-        match (self.image.as_ref(), self.image_ore.as_ref()) {
-            (Some(img), Some(img_ore)) => {
+        match self.image.as_ref().zip(self.image_ore.as_ref()) {
+            Some((img, img_ore)) => {
                 for y in 0..self.viewport_height as u32 / 32 {
                     for x in 0..self.viewport_width as u32 / 32 {
                         context.draw_image_with_image_bitmap(
@@ -170,6 +223,11 @@ impl FactorishState {
                 return Err(JsValue::from_str("image not available"));
             }
         }
+
+        for structure in &self.structures {
+            structure.draw(&self, &context);
+        }
+
         Ok(())
     }
 }
