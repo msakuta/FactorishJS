@@ -139,6 +139,7 @@
 		<script src="xorshift.js"></script>
 		<script src="perlinNoise.js"></script>
 		<script src="FactorishJS.js"></script>
+		<script type="module" src="./pkg/factorish_js.js"></script>
 	</head>
 	<body>
 		<h1>FactorishJS</h1>
@@ -158,6 +159,7 @@
 		<hr>
 		<div style="position: relative">
 			<div id="container"></div>
+			<canvas id="canvas" width="800" height="600"></canvas>
 			<div id="inventory" class="noselect">
 				<div id="inventoryTitle">Inventory</div>
 				<div class="closeButton" onclick="Conveyor.hideInventory()"></div>
@@ -184,4 +186,24 @@
 		<hr>
 		<p>Source on <a href="https://github.com/msakuta/FactorishJS">GitHub</a>.</p>
 	</body>
+<script type="module">
+	import init, { FactorishState } from "./pkg/factorish_js.js";
+
+	window.onload = async function(){
+		await init();
+		let sim = new FactorishState();
+
+		const canvas = document.getElementById('canvas');
+		const canvasSize = canvas.getBoundingClientRect();
+		const ctx = canvas.getContext('webgl');
+
+		sim.render_init(ctx);
+
+		window.setInterval(function(){
+			sim.simulate(0.05);
+			sim.render(ctx);
+		}, 50);
+		// simulate()
+	}
+</script>
 </html>
