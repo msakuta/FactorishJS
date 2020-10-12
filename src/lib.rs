@@ -3,7 +3,9 @@ mod utils;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, HtmlDivElement, ImageBitmap};
+use web_sys::{
+    CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, HtmlImageElement, ImageBitmap,
+};
 
 #[wasm_bindgen]
 extern "C" {
@@ -187,10 +189,10 @@ impl FactorishState {
                 elem.set_inner_html(&format!(
                     r#"Empty tile<br>
                     Iron Ore: {}<br>"#,
-                    self.board[cursor[0] as usize + cursor[1] as usize * self.width as usize].iron_ore,
+                    self.board[cursor[0] as usize + cursor[1] as usize * self.width as usize]
+                        .iron_ore,
                 ));
-            }
-            else {
+            } else {
                 elem.set_inner_html("");
             }
         }
@@ -276,12 +278,7 @@ impl FactorishState {
         if let Some(ref cursor) = self.cursor {
             context.set_stroke_style(&JsValue::from_str("blue"));
             context.set_line_width(2.);
-            context.stroke_rect(
-                (cursor[0] * 32) as f64,
-                (cursor[1] * 32) as f64,
-                32.,
-                32.,
-            );
+            context.stroke_rect((cursor[0] * 32) as f64, (cursor[1] * 32) as f64, 32., 32.);
         }
 
         Ok(())
