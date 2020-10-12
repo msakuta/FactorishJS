@@ -114,6 +114,9 @@ pub struct FactorishState {
     board: Vec<Cell>,
     structures: Vec<TransportBelt>,
 
+    // rendering states
+    cursor: [i32; 2],
+
     image: Option<ImageBitmap>,
     image_ore: Option<HtmlImageElement>,
     image_belt: Option<HtmlImageElement>,
@@ -137,6 +140,7 @@ impl FactorishState {
             height,
             viewport_height: 0.,
             viewport_width: 0.,
+            cursor: [0; 2],
             image: None,
             image_ore: None,
             image_belt: None,
@@ -164,9 +168,25 @@ impl FactorishState {
 
     #[wasm_bindgen]
     pub fn simulate(&mut self, delta_time: f64) {
-        console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
+        // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         self.delta_time = delta_time;
         self.sim_time += delta_time;
+    }
+
+    #[wasm_bindgen]
+    pub fn mouse_move(&mut self, pos: &[f64]) -> Result<(), JsValue> {
+        if pos.len() < 2 {
+            return Err(JsValue::from_str("position must have 2 elements"));
+        }
+        self.cursor = [(pos[0] / 32.) as i32, (pos[1] / 32.) as i32];
+        console_log!(
+            "mouse_move: {}, {}, cursor: {}, {}",
+            pos[0],
+            pos[1],
+            self.cursor[0],
+            self.cursor[1]
+        );
+        Ok(())
     }
 
     #[wasm_bindgen]
@@ -214,10 +234,10 @@ impl FactorishState {
                         }
                     }
                 }
-                console_log!(
-                    "iron ore: {}",
-                    self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
-                );
+                // console_log!(
+                //     "iron ore: {}",
+                //     self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
+                // );
             }
             _ => {
                 return Err(JsValue::from_str("image not available"));
@@ -227,6 +247,15 @@ impl FactorishState {
         for structure in &self.structures {
             structure.draw(&self, &context)?;
         }
+
+        context.set_stroke_style(&JsValue::from_str("blue"));
+        context.set_line_width(2.);
+        context.stroke_rect(
+            (self.cursor[0] * 32) as f64,
+            (self.cursor[1] * 32) as f64,
+            32.,
+            32.,
+        );
 
         Ok(())
     }

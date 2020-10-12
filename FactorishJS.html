@@ -206,6 +206,10 @@
 
 		sim.render_init(canvas, imageBitmap);
 
+		canvas.addEventListener("mousemove", function(evt){
+			sim.mouse_move([evt.offsetX, evt.offsetY]);
+		})
+
 		window.setInterval(function(){
 			sim.simulate(0.05);
 			let result = sim.render(ctx);
