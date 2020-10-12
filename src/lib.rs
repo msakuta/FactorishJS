@@ -115,7 +115,7 @@ pub struct FactorishState {
     structures: Vec<TransportBelt>,
 
     // rendering states
-    cursor: [i32; 2],
+    cursor: Option<[i32; 2]>,
 
     image: Option<ImageBitmap>,
     image_ore: Option<HtmlImageElement>,
@@ -140,7 +140,7 @@ impl FactorishState {
             height,
             viewport_height: 0.,
             viewport_width: 0.,
-            cursor: [0; 2],
+            cursor: None,
             image: None,
             image_ore: None,
             image_belt: None,
@@ -178,14 +178,20 @@ impl FactorishState {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
-        self.cursor = [(pos[0] / 32.) as i32, (pos[1] / 32.) as i32];
+        self.cursor = Some([(pos[0] / 32.) as i32, (pos[1] / 32.) as i32]);
         console_log!(
             "mouse_move: {}, {}, cursor: {}, {}",
             pos[0],
             pos[1],
-            self.cursor[0],
-            self.cursor[1]
+            self.cursor.unwrap_throw()[0],
+            self.cursor.unwrap_throw()[1]
         );
+        Ok(())
+    }
+
+    pub fn mouse_leave(&mut self) -> Result<(), JsValue> {
+        self.cursor = None;
+        console_log!("mouse_leave");
         Ok(())
     }
 
@@ -248,14 +254,16 @@ impl FactorishState {
             structure.draw(&self, &context)?;
         }
 
-        context.set_stroke_style(&JsValue::from_str("blue"));
-        context.set_line_width(2.);
-        context.stroke_rect(
-            (self.cursor[0] * 32) as f64,
-            (self.cursor[1] * 32) as f64,
-            32.,
-            32.,
-        );
+        if let Some(ref cursor) = self.cursor {
+            context.set_stroke_style(&JsValue::from_str("blue"));
+            context.set_line_width(2.);
+            context.stroke_rect(
+                (cursor[0] * 32) as f64,
+                (cursor[1] * 32) as f64,
+                32.,
+                32.,
+            );
+        }
 
         Ok(())
     }

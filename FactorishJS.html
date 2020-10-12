@@ -208,7 +208,11 @@
 
 		canvas.addEventListener("mousemove", function(evt){
 			sim.mouse_move([evt.offsetX, evt.offsetY]);
-		})
+		});
+
+		canvas.addEventListener("mouseleave", function(evt){
+			sim.mouse_leave([evt.offsetX, evt.offsetY]);
+		});
 
 		window.setInterval(function(){
 			sim.simulate(0.05);
