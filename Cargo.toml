@@ -45,6 +45,7 @@ features = [
     'HtmlElement',
     'HtmlCanvasElement',
     'HtmlImageElement',
+    'HtmlDivElement',
     'CssStyleDeclaration',
     'Node',
     'MouseEvent',

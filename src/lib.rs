@@ -3,7 +3,7 @@ mod utils;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageBitmap};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, HtmlDivElement, ImageBitmap};
 
 #[wasm_bindgen]
 extern "C" {
@@ -116,8 +116,9 @@ pub struct FactorishState {
 
     // rendering states
     cursor: Option<[i32; 2]>,
+    info_elem: Option<HtmlDivElement>,
 
-    image: Option<ImageBitmap>,
+    image_dirt: Option<HtmlImageElement>,
     image_ore: Option<HtmlImageElement>,
     image_belt: Option<HtmlImageElement>,
     // vertex_shader: Option<WebGlShader>,
@@ -141,7 +142,8 @@ impl FactorishState {
             viewport_height: 0.,
             viewport_width: 0.,
             cursor: None,
-            image: None,
+            info_elem: None,
+            image_dirt: None,
             image_ore: None,
             image_belt: None,
             board: {
@@ -178,7 +180,20 @@ impl FactorishState {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
-        self.cursor = Some([(pos[0] / 32.) as i32, (pos[1] / 32.) as i32]);
+        let cursor = [(pos[0] / 32.) as i32, (pos[1] / 32.) as i32];
+        self.cursor = Some(cursor);
+        if let Some(ref elem) = self.info_elem {
+            if cursor[0] < self.width as i32 && cursor[1] < self.height as i32 {
+                elem.set_inner_html(&format!(
+                    r#"Empty tile<br>
+                    Iron Ore: {}<br>"#,
+                    self.board[cursor[0] as usize + cursor[1] as usize * self.width as usize].iron_ore,
+                ));
+            }
+            else {
+                elem.set_inner_html("");
+            }
+        }
         console_log!(
             "mouse_move: {}, {}, cursor: {}, {}",
             pos[0],
@@ -191,6 +206,9 @@ impl FactorishState {
 
     pub fn mouse_leave(&mut self) -> Result<(), JsValue> {
         self.cursor = None;
+        if let Some(ref elem) = self.info_elem {
+            elem.set_inner_html("");
+        }
         console_log!("mouse_leave");
         Ok(())
     }
@@ -199,11 +217,11 @@ impl FactorishState {
     pub fn render_init(
         &mut self,
         canvas: HtmlCanvasElement,
-        img: ImageBitmap,
+        info_elem: HtmlDivElement,
     ) -> Result<(), JsValue> {
         self.viewport_width = canvas.width() as f64;
         self.viewport_height = canvas.height() as f64;
-        self.image = Some(img);
+        self.info_elem = Some(info_elem);
         let load_image = |path| -> Result<_, JsValue> {
             let img = HtmlImageElement::new()?;
             img.set_attribute("src", path)?;
@@ -211,6 +229,7 @@ impl FactorishState {
             body().append_child(&img)?;
             Ok(img)
         };
+        self.image_dirt = Some(load_image("img/dirt.png")?);
         self.image_ore = Some(load_image("img/iron.png")?);
         self.image_belt = Some(load_image("img/transport.png")?);
         Ok(())
@@ -222,11 +241,11 @@ impl FactorishState {
 
         context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
 
-        match self.image.as_ref().zip(self.image_ore.as_ref()) {
+        match self.image_dirt.as_ref().zip(self.image_ore.as_ref()) {
             Some((img, img_ore)) => {
                 for y in 0..self.viewport_height as u32 / 32 {
                     for x in 0..self.viewport_width as u32 / 32 {
-                        context.draw_image_with_image_bitmap(
+                        context.draw_image_with_html_image_element(
                             img,
                             x as f64 * 32.,
                             y as f64 * 32.,
