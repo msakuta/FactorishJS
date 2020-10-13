@@ -75,6 +75,10 @@ trait Structure {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue>;
+    fn desc(&self, _state: &FactorishState) -> String {
+        String::from("")
+    }
+    fn frame_proc(&mut self, _state: &mut FactorishState) {}
 }
 
 struct TransportBelt {
@@ -128,6 +132,17 @@ enum Rotation {
 struct OreMine {
     position: Position,
     rotation: Rotation,
+    cooldown: f64,
+}
+
+impl OreMine {
+    fn new(x: i32, y: i32, rotation: Rotation) -> Self {
+        OreMine {
+            position: Position { x, y },
+            rotation,
+            cooldown: 0.,
+        }
+    }
 }
 
 impl Structure for OreMine {
@@ -158,6 +173,56 @@ impl Structure for OreMine {
         }
 
         Ok(())
+    }
+
+    fn desc(&self, state: &FactorishState) -> String {
+        let tile = &state.board
+            [self.position.x as usize + self.position.y as usize * state.width as usize];
+        if 0 < tile.iron_ore {
+            let recipe_time = 80.;
+            // Progress bar
+            format!("{}{}{}{}",
+                format!("Progress: {:.0}%<br>", (recipe_time - self.cooldown) / recipe_time * 100.),
+                "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
+                format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
+                    (recipe_time - self.cooldown) / recipe_time * 100.),
+                // "Power: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
+                // "<div style='position: absolute; width: " + (this.maxPower ? (this.power) / this.maxPower * 100 : 0) + "px; height: 10px; background-color: #ff00ff'></div></div>" +
+                format!("Expected output: {}", tile.iron_ore))
+        // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
+        // "Outputs: <br>" +
+        // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
+        } else {
+            String::from("Empty")
+        }
+    }
+
+    fn frame_proc(&mut self, state: &mut FactorishState) {
+        let tile = &mut state.board
+            [self.position.x as usize + self.position.y as usize * state.width as usize];
+        let recipe_time = 80.;
+        if 0 < tile.iron_ore {
+            // First, check if we need to refill the energy buffer in order to continue the current work.
+            // if("Coal Ore" in this.inventory){
+            //     var coalPower = 100;
+            //     // Refill the energy from the fuel
+            //     if(this.power < this.recipe.powerCost){
+            //         this.power += coalPower;
+            //         this.maxPower = this.power;
+            //         this.removeItem("Coal Ore");
+            //     }
+            // }
+
+            // Proceed only if we have sufficient energy in the buffer.
+            let progress = 1.; //Math.min(this.power / this.recipe.powerCost, 1);
+            if self.cooldown < progress {
+                self.cooldown = recipe_time;
+                tile.iron_ore -= 1;
+            } else {
+                self.cooldown -= progress;
+                // self.power -= progress * self.recipe.powerCost;
+            }
+        }
     }
 }
 
@@ -222,36 +287,70 @@ impl FactorishState {
             },
             structures: vec![
                 Box::new(TransportBelt {
-                    position: Position { x: 10, y: 5 },
+                    position: Position { x: 10, y: 6 },
                 }),
                 Box::new(TransportBelt {
-                    position: Position { x: 11, y: 5 },
+                    position: Position { x: 11, y: 6 },
                 }),
                 Box::new(TransportBelt {
-                    position: Position { x: 12, y: 5 },
-                }),
-                Box::new(OreMine {
                     position: Position { x: 12, y: 6 },
-                    rotation: Rotation::Top,
                 }),
+                Box::new(OreMine::new(12, 7, Rotation::Top)),
             ],
         })
     }
 
     #[wasm_bindgen]
-    pub fn simulate(&mut self, delta_time: f64) {
+    pub fn simulate(&mut self, delta_time: f64) -> Result<(), JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         self.delta_time = delta_time;
         self.sim_time += delta_time;
+
+        // This is silly way to avoid borrow checker that temporarily move the structures
+        // away from self so that they do not claim mutable borrow twice, but it works.
+        let mut structures = std::mem::replace(&mut self.structures, Vec::new());
+        for structure in &mut structures {
+            structure.frame_proc(self);
+        }
+        self.structures = structures;
+        self.update_info();
+        Ok(())
+    }
+
+    fn find_structure_tile(&self, tile: &[i32]) -> Option<&dyn Structure> {
+        self.structures
+            .iter()
+            .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
+            .map(|s| s.as_ref())
     }
 
     fn find_structure(&self, pos: &[f64]) -> Option<&dyn Structure> {
-        self.structures
-            .iter()
-            .find(|s| {
-                s.position().x == (pos[0] / 32.) as i32 && s.position().y == (pos[1] / 32.) as i32
-            })
-            .map(|s| s.as_ref())
+        self.find_structure_tile(&[(pos[0] / 32.) as i32, (pos[1] / 32.) as i32])
+    }
+
+    fn update_info(&self) {
+        if let Some(cursor) = self.cursor {
+            if let Some(ref elem) = self.info_elem {
+                if cursor[0] < self.width as i32 && cursor[1] < self.height as i32 {
+                    elem.set_inner_html(
+                        &if let Some(structure) = self.find_structure_tile(&cursor) {
+                            format!(r#"Type: {}<br>{}"#, structure.name(), structure.desc(&self))
+                        } else {
+                            format!(
+                                r#"Empty tile<br>
+                                Iron Ore: {}<br>"#,
+                                self.board
+                                    [cursor[0] as usize + cursor[1] as usize * self.width as usize]
+                                    .iron_ore,
+                            )
+                        },
+                    );
+                } else {
+                    elem.set_inner_html("");
+                }
+            }
+            console_log!("cursor: {}, {}", cursor[0], cursor[1]);
+        }
     }
 
     #[wasm_bindgen]
@@ -261,29 +360,7 @@ impl FactorishState {
         }
         let cursor = [(pos[0] / 32.) as i32, (pos[1] / 32.) as i32];
         self.cursor = Some(cursor);
-        if let Some(ref elem) = self.info_elem {
-            if cursor[0] < self.width as i32 && cursor[1] < self.height as i32 {
-                elem.set_inner_html(&if let Some(structure) = self.find_structure(pos) {
-                    format!(r#"Type: {}"#, structure.name())
-                } else {
-                    format!(
-                        r#"Empty tile<br>
-                    Iron Ore: {}<br>"#,
-                        self.board[cursor[0] as usize + cursor[1] as usize * self.width as usize]
-                            .iron_ore,
-                    )
-                });
-            } else {
-                elem.set_inner_html("");
-            }
-        }
-        console_log!(
-            "mouse_move: {}, {}, cursor: {}, {}",
-            pos[0],
-            pos[1],
-            self.cursor.unwrap_throw()[0],
-            self.cursor.unwrap_throw()[1]
-        );
+        self.update_info();
         Ok(())
     }
 
