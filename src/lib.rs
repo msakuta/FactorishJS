@@ -3,9 +3,7 @@ mod utils;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{
-    CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, HtmlImageElement,
-};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, HtmlImageElement};
 
 #[wasm_bindgen]
 extern "C" {
@@ -64,8 +62,14 @@ struct Cell {
     iron_ore: u32,
 }
 
+struct Position {
+    x: i32,
+    y: i32,
+}
+
 trait Structure {
     fn name(&self) -> &str;
+    fn position(&self) -> &Position;
     fn draw(
         &self,
         state: &FactorishState,
@@ -74,13 +78,16 @@ trait Structure {
 }
 
 struct TransportBelt {
-    x: i32,
-    y: i32,
+    position: Position,
 }
 
 impl Structure for TransportBelt {
     fn name(&self) -> &str {
         "TransportBelt"
+    }
+
+    fn position(&self) -> &Position {
+        &self.position
     }
 
     fn draw(
@@ -97,14 +104,57 @@ impl Structure for TransportBelt {
                         0.,
                         32.,
                         32.,
-                        self.x as f64 * 32.,
-                        self.y as f64 * 32.,
+                        self.position.x as f64 * 32.,
+                        self.position.y as f64 * 32.,
                         32.,
                         32.,
                     )?;
                 }
             }
             None => return Err(JsValue::from_str("belt image not available")),
+        }
+
+        Ok(())
+    }
+}
+
+enum Rotation {
+    Left,
+    Top,
+    Right,
+    Bottom,
+}
+
+struct OreMine {
+    position: Position,
+    rotation: Rotation,
+}
+
+impl Structure for OreMine {
+    fn name(&self) -> &str {
+        "OreMine"
+    }
+
+    fn position(&self) -> &Position {
+        &self.position
+    }
+
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        match state.image_mine.as_ref() {
+            Some(img) => {
+                for i in 0..2 {
+                    context.draw_image_with_html_image_element(
+                        img,
+                        self.position.x as f64 * 32.,
+                        self.position.y as f64 * 32.,
+                    )?;
+                }
+            }
+            None => return Err(JsValue::from_str("mine image not available")),
         }
 
         Ok(())
@@ -120,7 +170,7 @@ pub struct FactorishState {
     viewport_width: f64,
     viewport_height: f64,
     board: Vec<Cell>,
-    structures: Vec<TransportBelt>,
+    structures: Vec<Box<dyn Structure>>,
 
     // rendering states
     cursor: Option<[i32; 2]>,
@@ -129,6 +179,7 @@ pub struct FactorishState {
     image_dirt: Option<HtmlImageElement>,
     image_ore: Option<HtmlImageElement>,
     image_belt: Option<HtmlImageElement>,
+    image_mine: Option<HtmlImageElement>,
     // vertex_shader: Option<WebGlShader>,
     // shader_program: Option<WebGlProgram>,
 }
@@ -154,6 +205,7 @@ impl FactorishState {
             image_dirt: None,
             image_ore: None,
             image_belt: None,
+            image_mine: None,
             board: {
                 let mut ret = vec![Cell { iron_ore: 0 }; (width * height) as usize];
                 for y in 0..height {
@@ -169,9 +221,19 @@ impl FactorishState {
                 ret
             },
             structures: vec![
-                TransportBelt { x: 10, y: 5 },
-                TransportBelt { x: 11, y: 5 },
-                TransportBelt { x: 12, y: 5 },
+                Box::new(TransportBelt {
+                    position: Position { x: 10, y: 5 },
+                }),
+                Box::new(TransportBelt {
+                    position: Position { x: 11, y: 5 },
+                }),
+                Box::new(TransportBelt {
+                    position: Position { x: 12, y: 5 },
+                }),
+                Box::new(OreMine {
+                    position: Position { x: 12, y: 6 },
+                    rotation: Rotation::Top,
+                }),
             ],
         })
     }
@@ -184,9 +246,12 @@ impl FactorishState {
     }
 
     fn find_structure(&self, pos: &[f64]) -> Option<&dyn Structure> {
-        self.structures.iter().find(|s|
-            s.x == (pos[0] / 32.) as i32 && s.y == (pos[1] / 32.) as i32
-        ).map(|s| s as &dyn Structure)
+        self.structures
+            .iter()
+            .find(|s| {
+                s.position().x == (pos[0] / 32.) as i32 && s.position().y == (pos[1] / 32.) as i32
+            })
+            .map(|s| s.as_ref())
     }
 
     #[wasm_bindgen]
@@ -200,13 +265,14 @@ impl FactorishState {
             if cursor[0] < self.width as i32 && cursor[1] < self.height as i32 {
                 elem.set_inner_html(&if let Some(structure) = self.find_structure(pos) {
                     format!(r#"Type: {}"#, structure.name())
-                }
-                else {format!(
-                    r#"Empty tile<br>
+                } else {
+                    format!(
+                        r#"Empty tile<br>
                     Iron Ore: {}<br>"#,
-                    self.board[cursor[0] as usize + cursor[1] as usize * self.width as usize]
-                        .iron_ore,
-                )});
+                        self.board[cursor[0] as usize + cursor[1] as usize * self.width as usize]
+                            .iron_ore,
+                    )
+                });
             } else {
                 elem.set_inner_html("");
             }
@@ -249,6 +315,7 @@ impl FactorishState {
         self.image_dirt = Some(load_image("img/dirt.png")?);
         self.image_ore = Some(load_image("img/iron.png")?);
         self.image_belt = Some(load_image("img/transport.png")?);
+        self.image_mine = Some(load_image("img/mine.png")?);
         Ok(())
     }
 
