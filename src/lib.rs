@@ -4,7 +4,7 @@ mod utils;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{
-    CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, HtmlImageElement, ImageBitmap,
+    CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, HtmlImageElement,
 };
 
 #[wasm_bindgen]
@@ -42,6 +42,7 @@ fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
 }
 
+#[allow(dead_code)]
 fn request_animation_frame(f: &Closure<dyn FnMut()>) {
     window()
         .request_animation_frame(f.as_ref().unchecked_ref())
@@ -64,6 +65,7 @@ struct Cell {
 }
 
 trait Structure {
+    fn name(&self) -> &str;
     fn draw(
         &self,
         state: &FactorishState,
@@ -77,6 +79,10 @@ struct TransportBelt {
 }
 
 impl Structure for TransportBelt {
+    fn name(&self) -> &str {
+        "TransportBelt"
+    }
+
     fn draw(
         &self,
         state: &FactorishState,
@@ -177,6 +183,12 @@ impl FactorishState {
         self.sim_time += delta_time;
     }
 
+    fn find_structure(&self, pos: &[f64]) -> Option<&dyn Structure> {
+        self.structures.iter().find(|s|
+            s.x == (pos[0] / 32.) as i32 && s.y == (pos[1] / 32.) as i32
+        ).map(|s| s as &dyn Structure)
+    }
+
     #[wasm_bindgen]
     pub fn mouse_move(&mut self, pos: &[f64]) -> Result<(), JsValue> {
         if pos.len() < 2 {
@@ -186,12 +198,15 @@ impl FactorishState {
         self.cursor = Some(cursor);
         if let Some(ref elem) = self.info_elem {
             if cursor[0] < self.width as i32 && cursor[1] < self.height as i32 {
-                elem.set_inner_html(&format!(
+                elem.set_inner_html(&if let Some(structure) = self.find_structure(pos) {
+                    format!(r#"Type: {}"#, structure.name())
+                }
+                else {format!(
                     r#"Empty tile<br>
                     Iron Ore: {}<br>"#,
                     self.board[cursor[0] as usize + cursor[1] as usize * self.width as usize]
                         .iron_ore,
-                ));
+                )});
             } else {
                 elem.set_inner_html("");
             }
