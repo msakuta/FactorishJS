@@ -308,7 +308,7 @@ impl FactorishState {
 
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
-        let mut structures = std::mem::replace(&mut self.structures, Vec::new());
+        let mut structures = std::mem::take(&mut self.structures);
         for structure in &mut structures {
             structure.frame_proc(self);
         }
@@ -349,7 +349,6 @@ impl FactorishState {
                     elem.set_inner_html("");
                 }
             }
-            console_log!("cursor: {}, {}", cursor[0], cursor[1]);
         }
     }
 
@@ -360,6 +359,7 @@ impl FactorishState {
         }
         let cursor = [(pos[0] / 32.) as i32, (pos[1] / 32.) as i32];
         self.cursor = Some(cursor);
+        console_log!("cursor: {}, {}", cursor[0], cursor[1]);
         self.update_info();
         Ok(())
     }
