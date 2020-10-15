@@ -136,6 +136,17 @@ enum Rotation {
     Bottom,
 }
 
+impl Rotation {
+    fn delta(&self) -> (i32, i32) {
+        match self {
+            Rotation::Left => (-1, 0),
+            Rotation::Top => (0, -1),
+            Rotation::Right => (1, 0),
+            Rotation::Bottom => (0, 1),
+        }
+    }
+}
+
 struct OreMine {
     position: Position,
     rotation: Rotation,
@@ -227,12 +238,7 @@ impl Structure for OreMine {
             let progress = 1.; //Math.min(this.power / this.recipe.powerCost, 1);
             if self.cooldown < progress {
                 self.cooldown = 0.;
-                let (vx, vy) = match self.rotation {
-                    Rotation::Left => (-1, 0),
-                    Rotation::Top => (0, -1),
-                    Rotation::Right => (1, 0),
-                    Rotation::Bottom => (0, 1),
-                };
+                let (vx, vy) = self.rotation.delta();
                 let dx = self.position.x + vx;
                 let dy = self.position.y + vy;
                 // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
