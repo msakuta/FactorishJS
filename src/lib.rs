@@ -67,71 +67,6 @@ struct Position {
     y: i32,
 }
 
-trait Structure {
-    fn name(&self) -> &str;
-    fn position(&self) -> &Position;
-    fn draw(
-        &self,
-        state: &FactorishState,
-        context: &CanvasRenderingContext2d,
-    ) -> Result<(), JsValue>;
-    fn desc(&self, _state: &FactorishState) -> String {
-        String::from("")
-    }
-    fn frame_proc(&mut self, _state: &mut FactorishState) {}
-    fn movable(&self) -> bool {
-        false
-    }
-    fn rotate(&mut self) -> Result<(), ()> {
-        Ok(())
-    }
-}
-
-struct TransportBelt {
-    position: Position,
-}
-
-impl Structure for TransportBelt {
-    fn name(&self) -> &str {
-        "TransportBelt"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
-    fn draw(
-        &self,
-        state: &FactorishState,
-        context: &CanvasRenderingContext2d,
-    ) -> Result<(), JsValue> {
-        match state.image_belt.as_ref() {
-            Some(img) => {
-                for i in 0..2 {
-                    context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                        img,
-                        i as f64 * 32. - (state.sim_time * 16.) % 32.,
-                        0.,
-                        32.,
-                        32.,
-                        self.position.x as f64 * 32.,
-                        self.position.y as f64 * 32.,
-                        32.,
-                        32.,
-                    )?;
-                }
-            }
-            None => return Err(JsValue::from_str("belt image not available")),
-        }
-
-        Ok(())
-    }
-
-    fn movable(&self) -> bool {
-        true
-    }
-}
-
 enum Rotation {
     Left,
     Top,
@@ -172,6 +107,92 @@ impl Rotation {
     }
 }
 
+trait Structure {
+    fn name(&self) -> &str;
+    fn position(&self) -> &Position;
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue>;
+    fn desc(&self, _state: &FactorishState) -> String {
+        String::from("")
+    }
+    fn frame_proc(&mut self, _state: &mut FactorishState) {}
+    fn movable(&self) -> bool {
+        false
+    }
+    fn rotate(&mut self) -> Result<(), ()> {
+        Err(())
+    }
+}
+
+struct TransportBelt {
+    position: Position,
+    rotation: Rotation,
+}
+
+impl TransportBelt {
+    fn new(x: i32, y: i32, rotation: Rotation) -> Self {
+        TransportBelt {
+            position: Position { x, y },
+            rotation,
+        }
+    }
+}
+
+impl Structure for TransportBelt {
+    fn name(&self) -> &str {
+        "TransportBelt"
+    }
+
+    fn position(&self) -> &Position {
+        &self.position
+    }
+
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        match state.image_belt.as_ref() {
+            Some(img) => {
+                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+                context.save();
+                context.translate(x + 16., y + 16.)?;
+                context.rotate(self.rotation.angle_rad())?;
+                context.translate(-(x + 16.), -(y + 16.))?;
+                for i in 0..2 {
+                    context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                        img,
+                        i as f64 * 32. - (state.sim_time * 16.) % 32.,
+                        0.,
+                        32.,
+                        32.,
+                        self.position.x as f64 * 32.,
+                        self.position.y as f64 * 32.,
+                        32.,
+                        32.,
+                    )?;
+                }
+                context.restore();
+            }
+            None => return Err(JsValue::from_str("belt image not available")),
+        }
+
+        Ok(())
+    }
+
+    fn movable(&self) -> bool {
+        true
+    }
+
+    fn rotate(&mut self) -> Result<(), ()> {
+        self.rotation.next();
+        Ok(())
+    }
+}
+
 struct OreMine {
     position: Position,
     rotation: Rotation,
@@ -202,20 +223,16 @@ impl Structure for OreMine {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
+        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_mine.as_ref() {
             Some(img) => {
-                context.draw_image_with_html_image_element(
-                    img,
-                    self.position.x as f64 * 32.,
-                    self.position.y as f64 * 32.,
-                )?;
+                context.draw_image_with_html_image_element(img, x, y)?;
             }
             None => return Err(JsValue::from_str("mine image not available")),
         }
 
         match state.image_direction.as_ref() {
             Some(img) => {
-                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
                 context.save();
                 context.translate(x + 16., y + 16.)?;
                 context.rotate(self.rotation.angle_rad())?;
@@ -402,15 +419,9 @@ impl FactorishState {
                 ret
             },
             structures: vec![
-                Box::new(TransportBelt {
-                    position: Position { x: 10, y: 6 },
-                }),
-                Box::new(TransportBelt {
-                    position: Position { x: 11, y: 6 },
-                }),
-                Box::new(TransportBelt {
-                    position: Position { x: 12, y: 6 },
-                }),
+                Box::new(TransportBelt::new(10, 6, Rotation::Left)),
+                Box::new(TransportBelt::new(11, 6, Rotation::Left)),
+                Box::new(TransportBelt::new(12, 6, Rotation::Left)),
                 Box::new(OreMine::new(12, 7, Rotation::Top)),
             ],
             drop_items: vec![],
