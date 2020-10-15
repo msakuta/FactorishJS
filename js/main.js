@@ -50,6 +50,11 @@ window.onload = async function(){
         sim.mouse_leave([evt.offsetX, evt.offsetY]);
     });
 
+    function onKeyDown(event){
+        sim.on_key_down(event.keyCode);
+    }
+    window.addEventListener( 'keydown', onKeyDown, false );
+
     window.setInterval(function(){
         sim.simulate(0.05);
         let result = sim.render(ctx);

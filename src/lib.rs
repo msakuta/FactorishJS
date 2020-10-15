@@ -82,6 +82,9 @@ trait Structure {
     fn movable(&self) -> bool {
         false
     }
+    fn rotate(&mut self) -> Result<(), ()> {
+        Ok(())
+    }
 }
 
 struct TransportBelt {
@@ -145,6 +148,28 @@ impl Rotation {
             Rotation::Bottom => (0, 1),
         }
     }
+
+    fn next(&mut self) {
+        *self = match self {
+            Rotation::Left => Rotation::Top,
+            Rotation::Top => Rotation::Right,
+            Rotation::Right => Rotation::Bottom,
+            Rotation::Bottom => Rotation::Left,
+        }
+    }
+
+    fn angle_deg(&self) -> i32 {
+        match self {
+            Rotation::Left => 0,
+            Rotation::Top => 90,
+            Rotation::Right => 180,
+            Rotation::Bottom => 270,
+        }
+    }
+
+    fn angle_rad(&self) -> f64 {
+        self.angle_deg() as f64 * std::f64::consts::PI / 180.
+    }
 }
 
 struct OreMine {
@@ -179,15 +204,26 @@ impl Structure for OreMine {
     ) -> Result<(), JsValue> {
         match state.image_mine.as_ref() {
             Some(img) => {
-                for _ in 0..2 {
-                    context.draw_image_with_html_image_element(
-                        img,
-                        self.position.x as f64 * 32.,
-                        self.position.y as f64 * 32.,
-                    )?;
-                }
+                context.draw_image_with_html_image_element(
+                    img,
+                    self.position.x as f64 * 32.,
+                    self.position.y as f64 * 32.,
+                )?;
             }
             None => return Err(JsValue::from_str("mine image not available")),
+        }
+
+        match state.image_direction.as_ref() {
+            Some(img) => {
+                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+                context.save();
+                context.translate(x + 16., y + 16.)?;
+                context.rotate(self.rotation.angle_rad())?;
+                context.translate(-(x + 16. + 4.) + 16., -(y + 16. + 8.) + 16.)?;
+                context.draw_image_with_html_image_element(img, x, y)?;
+                context.restore();
+            }
+            None => return Err(JsValue::from_str("direction image not available")),
         }
 
         Ok(())
@@ -244,8 +280,7 @@ impl Structure for OreMine {
                 // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
                 if let Err(code) = state.new_object(dx, dy, ItemType::IronOre) {
                     console_log!("Failed to create object: {:?}", code);
-                }
-                else {
+                } else {
                     if let Some(tile) = &mut state.tile_at(&[self.position.x, self.position.y]) {
                         self.cooldown = recipe_time;
                         tile.iron_ore -= 1;
@@ -256,6 +291,11 @@ impl Structure for OreMine {
                 // self.power -= progress * self.recipe.powerCost;
             }
         }
+    }
+
+    fn rotate(&mut self) -> Result<(), ()> {
+        self.rotation.next();
+        Ok(())
     }
 }
 
@@ -306,6 +346,7 @@ pub struct FactorishState {
     image_ore: Option<HtmlImageElement>,
     image_belt: Option<HtmlImageElement>,
     image_mine: Option<HtmlImageElement>,
+    image_direction: Option<HtmlImageElement>,
     image_iron_ore: Option<HtmlImageElement>,
 }
 
@@ -314,6 +355,12 @@ enum NewObjectErr {
     BlockedByStructure,
     BlockedByItem,
     OutOfMap,
+}
+
+#[derive(Debug)]
+enum RotateErr {
+    NotFound,
+    NotSupported,
 }
 
 #[wasm_bindgen]
@@ -338,6 +385,7 @@ impl FactorishState {
             image_ore: None,
             image_belt: None,
             image_mine: None,
+            image_direction: None,
             image_iron_ore: None,
             board: {
                 let mut ret = vec![Cell { iron_ore: 0 }; (width * height) as usize];
@@ -388,19 +436,44 @@ impl FactorishState {
     }
 
     fn tile_at(&self, tile: &[i32]) -> Option<Cell> {
-        if 0 <= tile[0] && tile[0] < self.width as i32 && 0 <= tile[1] && tile[1] < self.height as i32 {
+        if 0 <= tile[0]
+            && tile[0] < self.width as i32
+            && 0 <= tile[1]
+            && tile[1] < self.height as i32
+        {
             Some(self.board[tile[0] as usize + tile[1] as usize * self.width as usize])
         } else {
             None
         }
     }
 
+    /// Look up a structure at a given tile coordinates
     fn find_structure_tile(&self, tile: &[i32]) -> Option<&dyn Structure> {
         self.structures
             .iter()
             .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
             .map(|s| s.as_ref())
     }
+
+    /// Dirty hack to enable modifying a structure in an array.
+    /// Instead of returning mutable reference, return an index into the array, so the
+    /// caller can directly reference the structure from array `self.structures[idx]`.
+    ///
+    /// Because mutable version of find_structure_tile doesn't work.
+    fn find_structure_tile_idx(&self, tile: &[i32]) -> Option<usize> {
+        self.structures
+            .iter()
+            .enumerate()
+            .find(|(_, s)| s.position().x == tile[0] && s.position().y == tile[1])
+            .map(|(idx, _)| idx)
+    }
+
+    // fn find_structure_tile_mut<'a>(&'a mut self, tile: &[i32]) -> Option<&'a mut dyn Structure> {
+    //     self.structures
+    //         .iter_mut()
+    //         .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
+    //         .map(|s| s.as_mut())
+    // }
 
     fn find_structure(&self, pos: &[f64]) -> Option<&dyn Structure> {
         self.find_structure_tile(&[(pos[0] / 32.) as i32, (pos[1] / 32.) as i32])
@@ -445,6 +518,17 @@ impl FactorishState {
         false
     }
 
+    fn rotate(&mut self) -> Result<(), RotateErr> {
+        if let Some(ref cursor) = self.cursor {
+            if let Some(idx) = self.find_structure_tile_idx(cursor) {
+                return Ok(self.structures[idx]
+                    .rotate()
+                    .map_err(|()| RotateErr::NotSupported)?);
+            }
+        }
+        Err(RotateErr::NotFound)
+    }
+
     /// Insert an object on the board.  It could fail if there's already some object at the position.
     fn new_object(&mut self, c: i32, r: i32, type_: ItemType) -> Result<(), NewObjectErr> {
         let obj = DropItem::new(32, &mut self.serial_no, type_, c, r);
@@ -486,6 +570,14 @@ impl FactorishState {
         Ok(())
     }
 
+    pub fn on_key_down(&mut self, key_code: i32) -> Result<(), JsValue> {
+        if key_code == 82 {
+            self.rotate()
+                .map_err(|err| JsValue::from(format!("Rotate failed: {:?}", err)))?;
+        }
+        Ok(())
+    }
+
     #[wasm_bindgen]
     pub fn render_init(
         &mut self,
@@ -506,6 +598,7 @@ impl FactorishState {
         self.image_ore = Some(load_image("img/iron.png")?);
         self.image_belt = Some(load_image("img/transport.png")?);
         self.image_mine = Some(load_image("img/mine.png")?);
+        self.image_direction = Some(load_image("img/direction.png")?);
         self.image_iron_ore = Some(load_image("img/ore.png")?);
         Ok(())
     }
