@@ -168,7 +168,7 @@ impl Structure for OreMine {
     ) -> Result<(), JsValue> {
         match state.image_mine.as_ref() {
             Some(img) => {
-                for i in 0..2 {
+                for _ in 0..2 {
                     context.draw_image_with_html_image_element(
                         img,
                         self.position.x as f64 * 32.,
@@ -205,8 +205,11 @@ impl Structure for OreMine {
     }
 
     fn frame_proc(&mut self, state: &mut FactorishState) {
-        let tile = &mut state.board
-            [self.position.x as usize + self.position.y as usize * state.width as usize];
+        let otile = &state.tile_at(&[self.position.x, self.position.y]);
+        if otile.is_none() {
+            return;
+        }
+        let tile = otile.unwrap();
         let recipe_time = 80.;
         if 0 < tile.iron_ore {
             // First, check if we need to refill the energy buffer in order to continue the current work.
@@ -223,8 +226,7 @@ impl Structure for OreMine {
             // Proceed only if we have sufficient energy in the buffer.
             let progress = 1.; //Math.min(this.power / this.recipe.powerCost, 1);
             if self.cooldown < progress {
-                self.cooldown = recipe_time;
-                tile.iron_ore -= 1;
+                self.cooldown = 0.;
                 let (vx, vy) = match self.rotation {
                     Rotation::Left => (-1, 0),
                     Rotation::Top => (0, -1),
@@ -233,8 +235,16 @@ impl Structure for OreMine {
                 };
                 let dx = self.position.x + vx;
                 let dy = self.position.y + vy;
-                let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
-                state.new_object(dx, dy, ItemType::IronOre);
+                // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
+                if let Err(code) = state.new_object(dx, dy, ItemType::IronOre) {
+                    console_log!("Failed to create object: {:?}", code);
+                }
+                else {
+                    if let Some(tile) = &mut state.tile_at(&[self.position.x, self.position.y]) {
+                        self.cooldown = recipe_time;
+                        tile.iron_ore -= 1;
+                    }
+                }
             } else {
                 self.cooldown -= progress;
                 // self.power -= progress * self.recipe.powerCost;
@@ -247,6 +257,8 @@ enum ItemType {
     IronOre,
 }
 
+const objsize: i32 = 8;
+
 struct DropItem {
     id: u32,
     type_: ItemType,
@@ -255,15 +267,15 @@ struct DropItem {
 }
 
 impl DropItem {
-    fn new(tilesize: u32, serialNo: &mut u32, type_: ItemType, c: i32, r: i32) -> Self {
+    fn new(tilesize: u32, serial_no: &mut u32, type_: ItemType, c: i32, r: i32) -> Self {
         let itilesize = tilesize as i32;
-        let mut ret = DropItem {
-            id: *serialNo,
+        let ret = DropItem {
+            id: *serial_no,
             type_,
             x: c * itilesize + itilesize / 2,
             y: r * itilesize + itilesize / 2,
         };
-        *serialNo += 1;
+        *serial_no += 1;
         ret
     }
 }
@@ -289,6 +301,13 @@ pub struct FactorishState {
     image_belt: Option<HtmlImageElement>,
     image_mine: Option<HtmlImageElement>,
     image_iron_ore: Option<HtmlImageElement>,
+}
+
+#[derive(Debug)]
+enum NewObjectErr {
+    BlockedByStructure,
+    BlockedByItem,
+    OutOfMap,
 }
 
 #[wasm_bindgen]
@@ -362,8 +381,8 @@ impl FactorishState {
         Ok(())
     }
 
-    fn tile_at(&self, tile: &[u32]) -> Option<Cell> {
-        if 0 <= tile[0] && tile[0] < self.width && 0 <= tile[1] && tile[1] < self.height {
+    fn tile_at(&self, tile: &[i32]) -> Option<Cell> {
+        if 0 <= tile[0] && tile[0] < self.width as i32 && 0 <= tile[1] && tile[1] < self.height as i32 {
             Some(self.board[tile[0] as usize + tile[1] as usize * self.width as usize])
         } else {
             None
@@ -405,23 +424,39 @@ impl FactorishState {
         }
     }
 
+    /// Check whether given coordinates hits some object
+    fn hit_check(&self, x: i32, y: i32, ignore: Option<u32>) -> bool {
+        for item in &self.drop_items {
+            if let Some(ignore_id) = ignore {
+                if ignore_id == item.id {
+                    continue;
+                }
+            }
+            if (x - item.x).abs() < objsize && (y - item.y).abs() < objsize {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Insert an object on the board.  It could fail if there's already some object at the position.
-    fn new_object(&mut self, c: i32, r: i32, type_: ItemType) -> Result<(), ()> {
+    fn new_object(&mut self, c: i32, r: i32, type_: ItemType) -> Result<(), NewObjectErr> {
         let obj = DropItem::new(32, &mut self.serial_no, type_, c, r);
         if 0 <= c && c < self.width as i32 && 0 <= r && r < self.height as i32 {
             if let Some(stru) = self.find_structure_tile(&[c, r]) {
                 if !stru.movable() {
-                    return Err(());
+                    return Err(NewObjectErr::BlockedByStructure);
                 }
             }
             // return board[c + r * ysize].structure.input(obj);
-            // if(hitCheck(obj.x, obj.y))
-            //     return false;
+            if self.hit_check(obj.x, obj.y, Some(obj.id)) {
+                return Err(NewObjectErr::BlockedByItem);
+            }
             // obj.addElem();
             self.drop_items.push(obj);
             return Ok(());
         }
-        Err(())
+        Err(NewObjectErr::OutOfMap)
     }
 
     #[wasm_bindgen]
