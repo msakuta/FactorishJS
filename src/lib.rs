@@ -79,6 +79,9 @@ trait Structure {
         String::from("")
     }
     fn frame_proc(&mut self, _state: &mut FactorishState) {}
+    fn movable(&self) -> bool {
+        false
+    }
 }
 
 struct TransportBelt {
@@ -119,6 +122,10 @@ impl Structure for TransportBelt {
         }
 
         Ok(())
+    }
+
+    fn movable(&self) -> bool {
+        true
     }
 }
 
@@ -218,6 +225,16 @@ impl Structure for OreMine {
             if self.cooldown < progress {
                 self.cooldown = recipe_time;
                 tile.iron_ore -= 1;
+                let (vx, vy) = match self.rotation {
+                    Rotation::Left => (-1, 0),
+                    Rotation::Top => (0, -1),
+                    Rotation::Right => (1, 0),
+                    Rotation::Bottom => (0, 1),
+                };
+                let dx = self.position.x + vx;
+                let dy = self.position.y + vy;
+                let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
+                state.new_object(dx, dy, ItemType::IronOre);
             } else {
                 self.cooldown -= progress;
                 // self.power -= progress * self.recipe.powerCost;
@@ -226,6 +243,30 @@ impl Structure for OreMine {
     }
 }
 
+enum ItemType {
+    IronOre,
+}
+
+struct DropItem {
+    id: u32,
+    type_: ItemType,
+    x: i32,
+    y: i32,
+}
+
+impl DropItem {
+    fn new(tilesize: u32, serialNo: &mut u32, type_: ItemType, c: i32, r: i32) -> Self {
+        let itilesize = tilesize as i32;
+        let mut ret = DropItem {
+            id: *serialNo,
+            type_,
+            x: c * itilesize + itilesize / 2,
+            y: r * itilesize + itilesize / 2,
+        };
+        *serialNo += 1;
+        ret
+    }
+}
 #[wasm_bindgen]
 pub struct FactorishState {
     delta_time: f64,
@@ -236,6 +277,8 @@ pub struct FactorishState {
     viewport_height: f64,
     board: Vec<Cell>,
     structures: Vec<Box<dyn Structure>>,
+    drop_items: Vec<DropItem>,
+    serial_no: u32,
 
     // rendering states
     cursor: Option<[i32; 2]>,
@@ -245,8 +288,7 @@ pub struct FactorishState {
     image_ore: Option<HtmlImageElement>,
     image_belt: Option<HtmlImageElement>,
     image_mine: Option<HtmlImageElement>,
-    // vertex_shader: Option<WebGlShader>,
-    // shader_program: Option<WebGlProgram>,
+    image_iron_ore: Option<HtmlImageElement>,
 }
 
 #[wasm_bindgen]
@@ -271,6 +313,7 @@ impl FactorishState {
             image_ore: None,
             image_belt: None,
             image_mine: None,
+            image_iron_ore: None,
             board: {
                 let mut ret = vec![Cell { iron_ore: 0 }; (width * height) as usize];
                 for y in 0..height {
@@ -297,6 +340,8 @@ impl FactorishState {
                 }),
                 Box::new(OreMine::new(12, 7, Rotation::Top)),
             ],
+            drop_items: vec![],
+            serial_no: 0,
         })
     }
 
@@ -315,6 +360,14 @@ impl FactorishState {
         self.structures = structures;
         self.update_info();
         Ok(())
+    }
+
+    fn tile_at(&self, tile: &[u32]) -> Option<Cell> {
+        if 0 <= tile[0] && tile[0] < self.width && 0 <= tile[1] && tile[1] < self.height {
+            Some(self.board[tile[0] as usize + tile[1] as usize * self.width as usize])
+        } else {
+            None
+        }
     }
 
     fn find_structure_tile(&self, tile: &[i32]) -> Option<&dyn Structure> {
@@ -350,6 +403,25 @@ impl FactorishState {
                 }
             }
         }
+    }
+
+    /// Insert an object on the board.  It could fail if there's already some object at the position.
+    fn new_object(&mut self, c: i32, r: i32, type_: ItemType) -> Result<(), ()> {
+        let obj = DropItem::new(32, &mut self.serial_no, type_, c, r);
+        if 0 <= c && c < self.width as i32 && 0 <= r && r < self.height as i32 {
+            if let Some(stru) = self.find_structure_tile(&[c, r]) {
+                if !stru.movable() {
+                    return Err(());
+                }
+            }
+            // return board[c + r * ysize].structure.input(obj);
+            // if(hitCheck(obj.x, obj.y))
+            //     return false;
+            // obj.addElem();
+            self.drop_items.push(obj);
+            return Ok(());
+        }
+        Err(())
     }
 
     #[wasm_bindgen]
@@ -393,6 +465,7 @@ impl FactorishState {
         self.image_ore = Some(load_image("img/iron.png")?);
         self.image_belt = Some(load_image("img/transport.png")?);
         self.image_mine = Some(load_image("img/mine.png")?);
+        self.image_iron_ore = Some(load_image("img/ore.png")?);
         Ok(())
     }
 
@@ -432,6 +505,16 @@ impl FactorishState {
 
         for structure in &self.structures {
             structure.draw(&self, &context)?;
+        }
+
+        for item in &self.drop_items {
+            if let Some(ref img_iron_ore) = self.image_iron_ore {
+                context.draw_image_with_html_image_element(
+                    img_iron_ore,
+                    item.x as f64 - 8.,
+                    item.y as f64 - 8.,
+                )?;
+            }
         }
 
         if let Some(ref cursor) = self.cursor {
