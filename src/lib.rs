@@ -617,6 +617,22 @@ impl FactorishState {
         Err(NewObjectErr::OutOfMap)
     }
 
+    fn harvest(&mut self, position: &Position) -> bool {
+        if let Some(index) = self
+            .structures
+            .iter()
+            .enumerate()
+            .find(|(_, structure)| structure.position() == position)
+            .map(|item| item.0)
+        {
+            self.structures.remove(index);
+            true
+        }
+        else {
+            false
+        }
+    }
+
     pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<(), JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
@@ -626,18 +642,13 @@ impl FactorishState {
             y: (pos[1] / 32.) as i32,
         };
         if button == 0 {
+            self.harvest(&cursor);
             self.structures.push(match self.selected_tool {
                 0 => Box::new(TransportBelt::new(cursor.x, cursor.y, Rotation::Left)),
                 _ => Box::new(OreMine::new(cursor.x, cursor.y, Rotation::Left)),
             });
-        } else if let Some(index) = self
-            .structures
-            .iter()
-            .enumerate()
-            .find(|(_, structure)| structure.position() == &cursor)
-            .map(|item| item.0)
-        {
-            self.structures.remove(index);
+        } else {
+            self.harvest(&cursor);
         }
         console_log!("clicked: {}, {}", cursor.x, cursor.y);
         self.update_info();
