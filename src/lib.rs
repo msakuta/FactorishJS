@@ -137,6 +137,7 @@ trait Structure {
 }
 
 const tilesize: i32 = 32;
+const tool_defs: [&str; 2] = ["img/transport.png", "img/mine.png"];
 
 struct TransportBelt {
     position: Position,
@@ -373,6 +374,7 @@ pub struct FactorishState {
     structures: Vec<Box<dyn Structure>>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
+    selected_tool: usize,
 
     // rendering states
     cursor: Option<[i32; 2]>,
@@ -416,6 +418,7 @@ impl FactorishState {
             viewport_height: 0.,
             viewport_width: 0.,
             cursor: None,
+            selected_tool: 0,
             info_elem: None,
             image_dirt: None,
             image_ore: None,
@@ -623,11 +626,10 @@ impl FactorishState {
             y: (pos[1] / 32.) as i32,
         };
         if button == 0 {
-            self.structures.push(Box::new(TransportBelt::new(
-                cursor.x,
-                cursor.y,
-                Rotation::Left,
-            )));
+            self.structures.push(match self.selected_tool {
+                0 => Box::new(TransportBelt::new(cursor.x, cursor.y, Rotation::Left)),
+                _ => Box::new(OreMine::new(cursor.x, cursor.y, Rotation::Left)),
+            });
         } else if let Some(index) = self
             .structures
             .iter()
@@ -670,7 +672,6 @@ impl FactorishState {
         Ok(())
     }
 
-    #[wasm_bindgen]
     pub fn render_init(
         &mut self,
         canvas: HtmlCanvasElement,
@@ -693,6 +694,21 @@ impl FactorishState {
         self.image_direction = Some(load_image("img/direction.png")?);
         self.image_iron_ore = Some(load_image("img/ore.png")?);
         Ok(())
+    }
+
+    pub fn tool_defs(&self) -> Result<js_sys::Array, JsValue> {
+        Ok(tool_defs
+            .iter()
+            .map(|tool| JsValue::from_str(*tool))
+            .collect::<js_sys::Array>())
+    }
+
+    pub fn selected_tool(&self) -> JsValue {
+        JsValue::from(self.selected_tool as f64)
+    }
+
+    pub fn select_tool(&mut self, tool: usize) {
+        self.selected_tool = tool;
     }
 
     #[wasm_bindgen]

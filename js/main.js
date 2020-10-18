@@ -16,6 +16,7 @@ window.onload = async function(){
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
 
+    const tilesize = 32;
     const tableMargin = 10.;
     const miniMapSize = 200;
     const miniMapElem = document.createElement('div');
@@ -39,6 +40,77 @@ window.onload = async function(){
     infoElem.style.width = miniMapSize + 'px';
     infoElem.style.height = (canvasSize.height - mrect.height - tableMargin) + 'px';
     infoElem.style.textAlign = 'left';
+
+    var toolDefs = sim.tool_defs();
+    var toolElems = [];
+    var toolCursorElem;
+    // Tool bar
+    var toolBarElem = document.createElement('div');
+    toolBarElem.style.borderStyle = 'solid';
+    toolBarElem.style.borderWidth = '1px';
+    toolBarElem.style.borderColor = 'red';
+    toolBarElem.style.position = 'relative';
+    toolBarElem.margin = '3px';
+    toolBarElem.style.left = '50%';
+    toolBarElem.style.width = ((toolDefs.length + 1) * tilesize + 8) + 'px';
+    toolBarElem.style.height = (tilesize + 8) + 'px';
+    container.appendChild(toolBarElem);
+    for(var i = 0; i < toolDefs.length; i++){
+        var toolContainer = document.createElement('span');
+        toolContainer.style.position = 'absolute';
+        toolContainer.style.display = 'inline-block';
+        toolContainer.style.width = '31px';
+        toolContainer.style.height = '31px';
+        toolContainer.style.top = '4px';
+        toolContainer.style.left = (32.0 * i + 4) + 'px';
+        toolContainer.style.border = '1px black solid';
+
+        var toolElem = document.createElement("div");
+        toolElems.push(toolElem);
+        toolElem.style.width = '31px';
+        toolElem.style.height = '31px';
+        toolElem.style.position = 'absolute';
+        toolElem.style.textAlign = 'center';
+        toolElem.onmousedown = function(e){
+            var currentTool = toolElems.indexOf(this);
+            sim.select_tool(currentTool);
+            if(!toolCursorElem){
+                toolCursorElem = document.createElement('div');
+                toolCursorElem.style.border = '2px blue solid';
+                toolCursorElem.style.pointerEvents = 'none';
+                toolBarElem.appendChild(toolCursorElem);
+            }
+            toolCursorElem.style.position = 'absolute';
+            toolCursorElem.style.top = '4px';
+            toolCursorElem.style.left = (tilesize * currentTool + 4) + 'px';
+            toolCursorElem.style.width = '30px';
+            toolCursorElem.style.height = '30px';
+            toolCursorElem.style.display = 'block';
+        }
+        toolElem.onmouseenter = function(e){
+            var idx = toolElems.indexOf(this);
+            if(idx < 0 || toolDefs.length <= idx)
+                return;
+            var tool = toolDefs[idx];
+            // var r = this.getBoundingClientRect();
+            // var cr = container.getBoundingClientRect();
+            // toolTip.style.left = (r.left - cr.left) + 'px';
+            // toolTip.style.top = (r.bottom - cr.top) + 'px';
+            // toolTip.style.display = 'block';
+            // var desc = tool.prototype.toolDesc();
+            // if(0 < desc.length)
+            //     desc = '<br>' + desc;
+            // toolTip.innerHTML = '<b>' + tool.prototype.name + '</b>' + desc;
+        };
+        toolElem.onmouseleave = function(e){
+            // toolTip.style.display = 'none';
+        };
+        toolElem.style.backgroundImage = 'url(' + toolDefs[i] + ')';
+        toolContainer.appendChild(toolElem);
+		toolBarElem.appendChild(toolContainer);
+    }
+	// Set the margin after contents are initialized
+	toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
     sim.render_init(canvas, infoElem);
 
