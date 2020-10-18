@@ -460,29 +460,26 @@ impl FactorishState {
         for structure in &mut structures {
             structure.frame_proc(self);
         }
-        console_log!("items: {}", self.drop_items.len());
         // let mut drop_items = std::mem::take(&mut self.drop_items);
-        let (width, height) = (self.width, self.height);
         for i in 0..self.drop_items.len() {
             let item = &self.drop_items[i];
-            if let Some(ItemResponse::Move(moved_x, moved_y)) = if 0 < item.x
-                && item.x < width as i32 * tilesize
+            if 0 < item.x
+                && item.x < self.width as i32 * tilesize
                 && 0 < item.y
-                && item.y < height as i32 * tilesize
+                && item.y < self.height as i32 * tilesize
             {
-                structures
+                if let Some(ItemResponse::Move(moved_x, moved_y)) = structures
                     .iter_mut()
                     .find(|s| s.position().x == item.x / 32 && s.position().y == item.y / 32)
                     .and_then(|structure| structure.item_response(item).ok())
-            } else {
-                None
-            } {
-                if self.hit_check(moved_x, moved_y, Some(item.id)) {
-                    continue;
+                {
+                    if self.hit_check(moved_x, moved_y, Some(item.id)) {
+                        continue;
+                    }
+                    let item = &mut self.drop_items[i];
+                    item.x = moved_x;
+                    item.y = moved_y;
                 }
-                let item = &mut self.drop_items[i];
-                item.x = moved_x;
-                item.y = moved_y;
             }
         }
         self.structures = structures;
