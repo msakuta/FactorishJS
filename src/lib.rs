@@ -62,6 +62,7 @@ struct Cell {
     iron_ore: u32,
 }
 
+#[derive(Eq, PartialEq)]
 struct Position {
     x: i32,
     y: i32,
@@ -315,8 +316,7 @@ impl Structure for OreMine {
                     if let Err(code) = state.new_object(dx, dy, ItemType::IronOre) {
                         console_log!("Failed to create object: {:?}", code);
                     } else {
-                        if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y])
-                        {
+                        if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y]) {
                             self.cooldown = recipe_time;
                             tile.iron_ore -= 1;
                         }
@@ -614,7 +614,34 @@ impl FactorishState {
         Err(NewObjectErr::OutOfMap)
     }
 
-    #[wasm_bindgen]
+    pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<(), JsValue> {
+        if pos.len() < 2 {
+            return Err(JsValue::from_str("position must have 2 elements"));
+        }
+        let cursor = Position {
+            x: (pos[0] / 32.) as i32,
+            y: (pos[1] / 32.) as i32,
+        };
+        if button == 0 {
+            self.structures.push(Box::new(TransportBelt::new(
+                cursor.x,
+                cursor.y,
+                Rotation::Left,
+            )));
+        } else if let Some(index) = self
+            .structures
+            .iter()
+            .enumerate()
+            .find(|(_, structure)| structure.position() == &cursor)
+            .map(|item| item.0)
+        {
+            self.structures.remove(index);
+        }
+        console_log!("clicked: {}, {}", cursor.x, cursor.y);
+        self.update_info();
+        Ok(())
+    }
+
     pub fn mouse_move(&mut self, pos: &[f64]) -> Result<(), JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));

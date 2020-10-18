@@ -42,6 +42,15 @@ window.onload = async function(){
 
     sim.render_init(canvas, infoElem);
 
+    canvas.addEventListener("mousedown", function(evt){
+        sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
+        evt.stopPropagation();
+        evt.preventDefault();
+        return false;
+    });
+    canvas.addEventListener("contextmenu", function(evt){
+        evt.preventDefault();
+    });
     canvas.addEventListener("mousemove", function(evt){
         sim.mouse_move([evt.offsetX, evt.offsetY]);
     });
