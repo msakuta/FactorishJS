@@ -315,7 +315,7 @@ impl Structure for OreMine {
                     if let Err(code) = state.new_object(dx, dy, ItemType::IronOre) {
                         console_log!("Failed to create object: {:?}", code);
                     } else {
-                        if let Some(tile) = &mut state.tile_at(&[self.position.x, self.position.y])
+                        if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y])
                         {
                             self.cooldown = recipe_time;
                             tile.iron_ore -= 1;
@@ -495,6 +495,18 @@ impl FactorishState {
             && tile[1] < self.height as i32
         {
             Some(self.board[tile[0] as usize + tile[1] as usize * self.width as usize])
+        } else {
+            None
+        }
+    }
+
+    fn tile_at_mut(&mut self, tile: &[i32]) -> Option<&mut Cell> {
+        if 0 <= tile[0]
+            && tile[0] < self.width as i32
+            && 0 <= tile[1]
+            && tile[1] < self.height as i32
+        {
+            Some(&mut self.board[tile[0] as usize + tile[1] as usize * self.width as usize])
         } else {
             None
         }
