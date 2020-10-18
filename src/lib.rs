@@ -95,10 +95,10 @@ impl Rotation {
 
     fn angle_deg(&self) -> i32 {
         match self {
-            Rotation::Left => 0,
-            Rotation::Top => 90,
-            Rotation::Right => 180,
-            Rotation::Bottom => 270,
+            Rotation::Left => 180,
+            Rotation::Top => 270,
+            Rotation::Right => 00,
+            Rotation::Bottom => 90,
         }
     }
 
@@ -106,6 +106,8 @@ impl Rotation {
         self.angle_deg() as f64 * std::f64::consts::PI / 180.
     }
 }
+
+type ItemResponse = Option<Box<dyn FnOnce(&mut FactorishState)>>;
 
 trait Structure {
     fn name(&self) -> &str;
@@ -125,7 +127,13 @@ trait Structure {
     fn rotate(&mut self) -> Result<(), ()> {
         Err(())
     }
+    /// Called every frame for each item that is on this structure.
+    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponse, ()> {
+        Err(())
+    }
 }
+
+const tilesize: i32 = 32;
 
 struct TransportBelt {
     position: Position,
@@ -190,6 +198,21 @@ impl Structure for TransportBelt {
     fn rotate(&mut self) -> Result<(), ()> {
         self.rotation.next();
         Ok(())
+    }
+
+    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponse, ()> {
+        let moved_x = item.x + self.rotation.delta().0;
+        let moved_y = item.y + self.rotation.delta().1;
+        let item_id = item.id;
+        Ok(Some(Box::new(move |state| {
+            if state.hit_check(moved_x, moved_y, Some(item_id)) {
+                return;
+            }
+            if let Some(item) = state.drop_items.iter_mut().find(|item| item.id == item_id) {
+                item.x = moved_x;
+                item.y = moved_y;
+            }
+        })))
     }
 }
 
@@ -294,13 +317,15 @@ impl Structure for OreMine {
                 let (vx, vy) = self.rotation.delta();
                 let dx = self.position.x + vx;
                 let dy = self.position.y + vy;
-                // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
-                if let Err(code) = state.new_object(dx, dy, ItemType::IronOre) {
-                    console_log!("Failed to create object: {:?}", code);
-                } else {
-                    if let Some(tile) = &mut state.tile_at(&[self.position.x, self.position.y]) {
-                        self.cooldown = recipe_time;
-                        tile.iron_ore -= 1;
+                if !state.hit_check(dx, dy, None) {
+                    // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
+                    if let Err(code) = state.new_object(dx, dy, ItemType::IronOre) {
+                        console_log!("Failed to create object: {:?}", code);
+                    } else {
+                        if let Some(tile) = &mut state.tile_at(&[self.position.x, self.position.y]) {
+                            self.cooldown = recipe_time;
+                            tile.iron_ore -= 1;
+                        }
                     }
                 }
             } else {
@@ -330,7 +355,7 @@ struct DropItem {
 }
 
 impl DropItem {
-    fn new(tilesize: u32, serial_no: &mut u32, type_: ItemType, c: i32, r: i32) -> Self {
+    fn new(serial_no: &mut u32, type_: ItemType, c: i32, r: i32) -> Self {
         let itilesize = tilesize as i32;
         let ret = DropItem {
             id: *serial_no,
@@ -441,7 +466,36 @@ impl FactorishState {
         for structure in &mut structures {
             structure.frame_proc(self);
         }
+        console_log!("items: {}", self.drop_items.len());
+        // let mut drop_items = std::mem::take(&mut self.drop_items);
+        let (width, height) = (self.width, self.height);
+        let procs: Vec<_> = self.drop_items.iter_mut().map(|item| {
+            if 0 < item.x && item.x < width as i32 * tilesize &&
+                0 < item.y && item.y < height as i32 * tilesize {
+                    if let Some(ref mut structure) = structures.iter_mut().find(|s| s.position().x == item.x / 32 && s.position().y == item.y / 32) {
+                        if let Ok(Some(proc)) = structure.item_response(item) {
+                            Some(proc)
+                        }
+                        else {
+                            None
+                        }
+                    }
+                    else{
+                        None
+                    }
+                }
+                else{
+                    None
+                }
+        }).collect();
+        procs.into_iter().for_each(|proc|
+        {
+            if let Some(okproc) = proc {
+                okproc(self)
+            }
+        });
         self.structures = structures;
+        // self.drop_items = drop_items;
         self.update_info();
         Ok(())
     }
@@ -542,7 +596,7 @@ impl FactorishState {
 
     /// Insert an object on the board.  It could fail if there's already some object at the position.
     fn new_object(&mut self, c: i32, r: i32, type_: ItemType) -> Result<(), NewObjectErr> {
-        let obj = DropItem::new(32, &mut self.serial_no, type_, c, r);
+        let obj = DropItem::new(&mut self.serial_no, type_, c, r);
         if 0 <= c && c < self.width as i32 && 0 <= r && r < self.height as i32 {
             if let Some(stru) = self.find_structure_tile(&[c, r]) {
                 if !stru.movable() {

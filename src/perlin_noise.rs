@@ -51,7 +51,7 @@ const fn make_crc_table() -> [u8; 256] {
 }
 
 fn crc32_gp(str: &[u32]) -> u32 {
-    let table = make_crc_table();
+    const table: [u8; 256] = make_crc_table();
     let mut crc = 0xffffffff; //0 ^ (-1);
 
     for i in 0..str.len() {
