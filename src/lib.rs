@@ -107,7 +107,9 @@ impl Rotation {
     }
 }
 
-type ItemResponse = Option<Box<dyn FnOnce(&mut FactorishState)>>;
+enum ItemResponse{
+    Move(i32, i32),
+}
 
 trait Structure {
     fn name(&self) -> &str;
@@ -203,16 +205,7 @@ impl Structure for TransportBelt {
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponse, ()> {
         let moved_x = item.x + self.rotation.delta().0;
         let moved_y = item.y + self.rotation.delta().1;
-        let item_id = item.id;
-        Ok(Some(Box::new(move |state| {
-            if state.hit_check(moved_x, moved_y, Some(item_id)) {
-                return;
-            }
-            if let Some(item) = state.drop_items.iter_mut().find(|item| item.id == item_id) {
-                item.x = moved_x;
-                item.y = moved_y;
-            }
-        })))
+        Ok(ItemResponse::Move(moved_x, moved_y))
     }
 }
 
@@ -469,12 +462,12 @@ impl FactorishState {
         console_log!("items: {}", self.drop_items.len());
         // let mut drop_items = std::mem::take(&mut self.drop_items);
         let (width, height) = (self.width, self.height);
-        let procs: Vec<_> = self.drop_items.iter_mut().map(|item| {
+        let procs: Vec<_> = self.drop_items.iter().map(|item| {
             if 0 < item.x && item.x < width as i32 * tilesize &&
                 0 < item.y && item.y < height as i32 * tilesize {
                     if let Some(ref mut structure) = structures.iter_mut().find(|s| s.position().x == item.x / 32 && s.position().y == item.y / 32) {
-                        if let Ok(Some(proc)) = structure.item_response(item) {
-                            Some(proc)
+                        if let Ok(resp) = structure.item_response(item) {
+                            Some((resp, item.id))
                         }
                         else {
                             None
@@ -488,10 +481,15 @@ impl FactorishState {
                     None
                 }
         }).collect();
-        procs.into_iter().for_each(|proc|
+        procs.into_iter().filter_map(|proc| proc).for_each(|(proc, item_id)|
         {
-            if let Some(okproc) = proc {
-                okproc(self)
+            let ItemResponse::Move(moved_x, moved_y) = proc;
+            if self.hit_check(moved_x, moved_y, Some(item_id)) {
+                return;
+            }
+            if let Some(item) = self.drop_items.iter_mut().find(|item| item.id == item_id) {
+                item.x = moved_x;
+                item.y = moved_y;
             }
         });
         self.structures = structures;
