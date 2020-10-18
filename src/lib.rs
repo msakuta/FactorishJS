@@ -4,6 +4,7 @@ mod utils;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, HtmlImageElement};
+use std::collections::HashMap;
 
 #[wasm_bindgen]
 extern "C" {
@@ -137,7 +138,14 @@ trait Structure {
 }
 
 const tilesize: i32 = 32;
-const tool_defs: [&str; 2] = ["img/transport.png", "img/mine.png"];
+struct ToolDef{
+    item_name: &'static str,
+    image: &'static str,
+}
+const tool_defs: [ToolDef; 2] = [
+    ToolDef{item_name: "TransportBelt", image: "img/transport.png"},
+    ToolDef{item_name: "OreMine", image: "img/mine.png"}
+    ];
 
 struct TransportBelt {
     position: Position,
@@ -375,6 +383,7 @@ pub struct FactorishState {
     drop_items: Vec<DropItem>,
     serial_no: u32,
     selected_tool: usize,
+    inventory: HashMap<String, usize>,
 
     // rendering states
     cursor: Option<[i32; 2]>,
@@ -419,6 +428,8 @@ impl FactorishState {
             viewport_width: 0.,
             cursor: None,
             selected_tool: 0,
+            inventory: [("TransportBelt", 10usize), ("OreMine", 5usize)]
+                .iter().map(|(s, num)| (String::from(*s), *num)).collect(),
             info_elem: None,
             image_dirt: None,
             image_ore: None,
@@ -618,13 +629,18 @@ impl FactorishState {
     }
 
     fn harvest(&mut self, position: &Position) -> bool {
-        if let Some(index) = self
+        if let Some((index, structure)) = self
             .structures
             .iter()
             .enumerate()
             .find(|(_, structure)| structure.position() == position)
-            .map(|item| item.0)
         {
+            if let Some(count) = self.inventory.get_mut(structure.name()) {
+                *count += 1;
+            }
+            else {
+                self.inventory.insert(structure.name().to_string(), 1);
+            }
             self.structures.remove(index);
             true
         }
@@ -642,11 +658,18 @@ impl FactorishState {
             y: (pos[1] / 32.) as i32,
         };
         if button == 0 {
-            self.harvest(&cursor);
-            self.structures.push(match self.selected_tool {
-                0 => Box::new(TransportBelt::new(cursor.x, cursor.y, Rotation::Left)),
-                _ => Box::new(OreMine::new(cursor.x, cursor.y, Rotation::Left)),
-            });
+            if let Some(count) = self.inventory.get(tool_defs[self.selected_tool].item_name) {
+                if 1 <= *count {
+                    self.harvest(&cursor);
+                    self.structures.push(match self.selected_tool {
+                        0 => Box::new(TransportBelt::new(cursor.x, cursor.y, Rotation::Left)),
+                        _ => Box::new(OreMine::new(cursor.x, cursor.y, Rotation::Left)),
+                    });
+                    if let Some(count) = self.inventory.get_mut(tool_defs[self.selected_tool].item_name) {
+                        *count -= 1;
+                    }
+                }
+            }
         } else {
             self.harvest(&cursor);
         }
@@ -710,16 +733,23 @@ impl FactorishState {
     pub fn tool_defs(&self) -> Result<js_sys::Array, JsValue> {
         Ok(tool_defs
             .iter()
-            .map(|tool| JsValue::from_str(*tool))
+            .map(|tool| JsValue::from_str(tool.image))
             .collect::<js_sys::Array>())
     }
 
-    pub fn selected_tool(&self) -> JsValue {
-        JsValue::from(self.selected_tool as f64)
+    pub fn selected_tool(&self) -> js_sys::Array {
+        [JsValue::from(self.selected_tool as f64), JsValue::from(self.inventory[tool_defs[self.selected_tool].item_name] as f64)]
+        .iter().collect()
     }
 
     pub fn select_tool(&mut self, tool: usize) {
         self.selected_tool = tool;
+    }
+
+    pub fn tool_inventory(&self) -> js_sys::Array {
+        tool_defs.iter().map(|tool|
+            JsValue::from(self.inventory[tool.item_name] as f64))
+        .collect()
     }
 
     #[wasm_bindgen]

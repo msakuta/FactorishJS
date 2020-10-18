@@ -43,6 +43,7 @@ window.onload = async function(){
 
     var toolDefs = sim.tool_defs();
     var toolElems = [];
+    var toolOverlays = [];
     var toolCursorElem;
     // Tool bar
     var toolBarElem = document.createElement('div');
@@ -64,6 +65,12 @@ window.onload = async function(){
         toolContainer.style.top = '4px';
         toolContainer.style.left = (32.0 * i + 4) + 'px';
         toolContainer.style.border = '1px black solid';
+
+        // Overlay for item count
+        var overlay = document.createElement('div');
+        toolOverlays.push(overlay);
+        overlay.setAttribute('class', 'overlay noselect');
+        overlay.innerHTML = '0';
 
         var toolElem = document.createElement("div");
         toolElems.push(toolElem);
@@ -107,6 +114,7 @@ window.onload = async function(){
         };
         toolElem.style.backgroundImage = 'url(' + toolDefs[i] + ')';
         toolContainer.appendChild(toolElem);
+		toolContainer.appendChild(overlay);
 		toolBarElem.appendChild(toolContainer);
     }
 	// Set the margin after contents are initialized
@@ -114,8 +122,15 @@ window.onload = async function(){
 
     sim.render_init(canvas, infoElem);
 
+    function updateToolBar(){
+        var inventory = sim.tool_inventory();
+        for(var i = 0; i < inventory.length; i++)
+            toolOverlays[i].innerHTML = inventory[i];
+    }
+
     canvas.addEventListener("mousedown", function(evt){
         sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
+        updateToolBar();
         evt.stopPropagation();
         evt.preventDefault();
         return false;
@@ -135,6 +150,8 @@ window.onload = async function(){
         sim.on_key_down(event.keyCode);
     }
     window.addEventListener( 'keydown', onKeyDown, false );
+
+    updateToolBar();
 
     window.setInterval(function(){
         sim.simulate(0.05);
