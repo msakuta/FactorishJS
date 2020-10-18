@@ -760,9 +760,19 @@ impl FactorishState {
         }
 
         if let Some(ref cursor) = self.cursor {
+            let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);
+            if let Some(img) = match self.selected_tool {
+                0 => self.image_belt.as_ref(),
+                _ => self.image_mine.as_ref(),
+            } {
+                context.save();
+                context.set_global_alpha(0.5);
+                context.draw_image_with_html_image_element(img, x, y);
+                context.restore();
+            }
             context.set_stroke_style(&JsValue::from_str("blue"));
             context.set_line_width(2.);
-            context.stroke_rect((cursor[0] * 32) as f64, (cursor[1] * 32) as f64, 32., 32.);
+            context.stroke_rect(x, y, 32., 32.);
         }
 
         Ok(())
