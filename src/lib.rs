@@ -107,7 +107,7 @@ impl Rotation {
     }
 }
 
-enum ItemResponse{
+enum ItemResponse {
     Move(i32, i32),
 }
 
@@ -315,7 +315,8 @@ impl Structure for OreMine {
                     if let Err(code) = state.new_object(dx, dy, ItemType::IronOre) {
                         console_log!("Failed to create object: {:?}", code);
                     } else {
-                        if let Some(tile) = &mut state.tile_at(&[self.position.x, self.position.y]) {
+                        if let Some(tile) = &mut state.tile_at(&[self.position.x, self.position.y])
+                        {
                             self.cooldown = recipe_time;
                             tile.iron_ore -= 1;
                         }
@@ -462,36 +463,28 @@ impl FactorishState {
         console_log!("items: {}", self.drop_items.len());
         // let mut drop_items = std::mem::take(&mut self.drop_items);
         let (width, height) = (self.width, self.height);
-        let procs: Vec<_> = self.drop_items.iter().map(|item| {
-            if 0 < item.x && item.x < width as i32 * tilesize &&
-                0 < item.y && item.y < height as i32 * tilesize {
-                    if let Some(ref mut structure) = structures.iter_mut().find(|s| s.position().x == item.x / 32 && s.position().y == item.y / 32) {
-                        if let Ok(resp) = structure.item_response(item) {
-                            Some((resp, item.id))
-                        }
-                        else {
-                            None
-                        }
-                    }
-                    else{
-                        None
-                    }
+        for i in 0..self.drop_items.len() {
+            let item = &self.drop_items[i];
+            if let Some(ItemResponse::Move(moved_x, moved_y)) = if 0 < item.x
+                && item.x < width as i32 * tilesize
+                && 0 < item.y
+                && item.y < height as i32 * tilesize
+            {
+                structures
+                    .iter_mut()
+                    .find(|s| s.position().x == item.x / 32 && s.position().y == item.y / 32)
+                    .and_then(|structure| structure.item_response(item).ok())
+            } else {
+                None
+            } {
+                if self.hit_check(moved_x, moved_y, Some(item.id)) {
+                    continue;
                 }
-                else{
-                    None
-                }
-        }).collect();
-        procs.into_iter().filter_map(|proc| proc).for_each(|(proc, item_id)|
-        {
-            let ItemResponse::Move(moved_x, moved_y) = proc;
-            if self.hit_check(moved_x, moved_y, Some(item_id)) {
-                return;
-            }
-            if let Some(item) = self.drop_items.iter_mut().find(|item| item.id == item_id) {
+                let item = &mut self.drop_items[i];
                 item.x = moved_x;
                 item.y = moved_y;
             }
-        });
+        }
         self.structures = structures;
         // self.drop_items = drop_items;
         self.update_info();
