@@ -1,10 +1,12 @@
 mod perlin_noise;
 mod utils;
 
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, HtmlImageElement};
-use std::collections::HashMap;
+
+use perlin_noise::perlin_noise_pixel;
 
 #[wasm_bindgen]
 extern "C" {
@@ -61,6 +63,7 @@ fn body() -> web_sys::HtmlElement {
 #[derive(Copy, Clone)]
 struct Cell {
     iron_ore: u32,
+    coal_ore: u32,
 }
 
 #[derive(Eq, PartialEq)]
@@ -138,14 +141,20 @@ trait Structure {
 }
 
 const tilesize: i32 = 32;
-struct ToolDef{
+struct ToolDef {
     item_name: &'static str,
     image: &'static str,
 }
 const tool_defs: [ToolDef; 2] = [
-    ToolDef{item_name: "TransportBelt", image: "img/transport.png"},
-    ToolDef{item_name: "OreMine", image: "img/mine.png"}
-    ];
+    ToolDef {
+        item_name: "TransportBelt",
+        image: "img/transport.png",
+    },
+    ToolDef {
+        item_name: "OreMine",
+        image: "img/mine.png",
+    },
+];
 
 struct TransportBelt {
     position: Position,
@@ -223,6 +232,7 @@ struct OreMine {
     position: Position,
     rotation: Rotation,
     cooldown: f64,
+    recipe: Option<ItemType>,
 }
 
 impl OreMine {
@@ -231,6 +241,7 @@ impl OreMine {
             position: Position { x, y },
             rotation,
             cooldown: 0.,
+            recipe: None,
         }
     }
 }
@@ -275,7 +286,7 @@ impl Structure for OreMine {
     fn desc(&self, state: &FactorishState) -> String {
         let tile = &state.board
             [self.position.x as usize + self.position.y as usize * state.width as usize];
-        if 0 < tile.iron_ore {
+        if let Some(recipe) = self.recipe {
             let recipe_time = 80.;
             // Progress bar
             format!("{}{}{}{}",
@@ -285,7 +296,7 @@ impl Structure for OreMine {
                     (recipe_time - self.cooldown) / recipe_time * 100.),
                 // "Power: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
                 // "<div style='position: absolute; width: " + (this.maxPower ? (this.power) / this.maxPower * 100 : 0) + "px; height: 10px; background-color: #ff00ff'></div></div>" +
-                format!("Expected output: {}", tile.iron_ore))
+                format!("Expected output: {}", if 0 < tile.iron_ore { tile.iron_ore } else { tile.coal_ore }))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
@@ -301,7 +312,14 @@ impl Structure for OreMine {
         }
         let tile = otile.unwrap();
         let recipe_time = 80.;
-        if 0 < tile.iron_ore {
+        if self.recipe.is_none() {
+            if 0 < tile.iron_ore {
+                self.recipe = Some(ItemType::IronOre);
+            } else if 0 < tile.coal_ore {
+                self.recipe = Some(ItemType::CoalOre);
+            }
+        }
+        if let Some(recipe) = &self.recipe {
             // First, check if we need to refill the energy buffer in order to continue the current work.
             // if("Coal Ore" in this.inventory){
             //     var coalPower = 100;
@@ -322,12 +340,15 @@ impl Structure for OreMine {
                 let dy = self.position.y + vy;
                 if !state.hit_check(dx, dy, None) {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
-                    if let Err(code) = state.new_object(dx, dy, ItemType::IronOre) {
-                        console_log!("Failed to create object: {:?}", code);
+                    if let Err(_code) = state.new_object(dx, dy, *recipe) {
+                        // console_log!("Failed to create object: {:?}", code);
                     } else {
                         if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y]) {
                             self.cooldown = recipe_time;
-                            tile.iron_ore -= 1;
+                            match recipe {
+                                ItemType::IronOre => tile.iron_ore -= 1,
+                                ItemType::CoalOre => tile.coal_ore -= 1,
+                            }
                         }
                     }
                 }
@@ -344,8 +365,10 @@ impl Structure for OreMine {
     }
 }
 
+#[derive(Copy, Clone)]
 enum ItemType {
     IronOre,
+    CoalOre,
 }
 
 const objsize: i32 = 8;
@@ -391,10 +414,12 @@ pub struct FactorishState {
 
     image_dirt: Option<HtmlImageElement>,
     image_ore: Option<HtmlImageElement>,
+    image_coal: Option<HtmlImageElement>,
     image_belt: Option<HtmlImageElement>,
     image_mine: Option<HtmlImageElement>,
     image_direction: Option<HtmlImageElement>,
     image_iron_ore: Option<HtmlImageElement>,
+    image_coal_ore: Option<HtmlImageElement>,
 }
 
 #[derive(Debug)]
@@ -429,24 +454,36 @@ impl FactorishState {
             cursor: None,
             selected_tool: 0,
             inventory: [("TransportBelt", 10usize), ("OreMine", 5usize)]
-                .iter().map(|(s, num)| (String::from(*s), *num)).collect(),
+                .iter()
+                .map(|(s, num)| (String::from(*s), *num))
+                .collect(),
             info_elem: None,
             image_dirt: None,
             image_ore: None,
+            image_coal: None,
             image_belt: None,
             image_mine: None,
             image_direction: None,
             image_iron_ore: None,
+            image_coal_ore: None,
             board: {
-                let mut ret = vec![Cell { iron_ore: 0 }; (width * height) as usize];
+                let mut ret = vec![
+                    Cell {
+                        iron_ore: 0,
+                        coal_ore: 0
+                    };
+                    (width * height) as usize
+                ];
                 for y in 0..height {
                     for x in 0..width {
-                        ret[(x + y * width) as usize].iron_ore = ((perlin_noise::perlin_noise_pixel(
-                            x as f64, y as f64, 3,
-                        ) - 0.5)
-                            * 100.)
-                            .max(0.)
-                            as u32;
+                        let [fx, fy] = [x as f64, y as f64];
+                        let iron = (perlin_noise_pixel(fx, fy, 8) * 4000. - 3000.).max(0.) as u32;
+                        let coal = (perlin_noise_pixel(fx, fy, 10) * 2000. - 1500.).max(0.) as u32;
+                        if iron < coal {
+                            ret[(x + y * width) as usize].coal_ore = coal;
+                        } else if 0 < iron {
+                            ret[(x + y * width) as usize].iron_ore = iron;
+                        }
                     }
                 }
                 ret
@@ -566,12 +603,13 @@ impl FactorishState {
                         &if let Some(structure) = self.find_structure_tile(&cursor) {
                             format!(r#"Type: {}<br>{}"#, structure.name(), structure.desc(&self))
                         } else {
+                            let cell = self.board
+                                [cursor[0] as usize + cursor[1] as usize * self.width as usize];
                             format!(
                                 r#"Empty tile<br>
-                                Iron Ore: {}<br>"#,
-                                self.board
-                                    [cursor[0] as usize + cursor[1] as usize * self.width as usize]
-                                    .iron_ore,
+                                Iron Ore: {}<br>
+                                Coal Ore: {}"#,
+                                cell.iron_ore, cell.coal_ore
                             )
                         },
                     );
@@ -637,14 +675,12 @@ impl FactorishState {
         {
             if let Some(count) = self.inventory.get_mut(structure.name()) {
                 *count += 1;
-            }
-            else {
+            } else {
                 self.inventory.insert(structure.name().to_string(), 1);
             }
             self.structures.remove(index);
             true
-        }
-        else {
+        } else {
             false
         }
     }
@@ -665,7 +701,10 @@ impl FactorishState {
                         0 => Box::new(TransportBelt::new(cursor.x, cursor.y, Rotation::Left)),
                         _ => Box::new(OreMine::new(cursor.x, cursor.y, Rotation::Left)),
                     });
-                    if let Some(count) = self.inventory.get_mut(tool_defs[self.selected_tool].item_name) {
+                    if let Some(count) = self
+                        .inventory
+                        .get_mut(tool_defs[self.selected_tool].item_name)
+                    {
                         *count -= 1;
                     }
                 }
@@ -723,10 +762,12 @@ impl FactorishState {
         };
         self.image_dirt = Some(load_image("img/dirt.png")?);
         self.image_ore = Some(load_image("img/iron.png")?);
+        self.image_coal = Some(load_image("img/coal.png")?);
         self.image_belt = Some(load_image("img/transport.png")?);
         self.image_mine = Some(load_image("img/mine.png")?);
         self.image_direction = Some(load_image("img/direction.png")?);
         self.image_iron_ore = Some(load_image("img/ore.png")?);
+        self.image_coal_ore = Some(load_image("img/coal-ore.png")?);
         Ok(())
     }
 
@@ -738,8 +779,12 @@ impl FactorishState {
     }
 
     pub fn selected_tool(&self) -> js_sys::Array {
-        [JsValue::from(self.selected_tool as f64), JsValue::from(self.inventory[tool_defs[self.selected_tool].item_name] as f64)]
-        .iter().collect()
+        [
+            JsValue::from(self.selected_tool as f64),
+            JsValue::from(self.inventory[tool_defs[self.selected_tool].item_name] as f64),
+        ]
+        .iter()
+        .collect()
     }
 
     pub fn select_tool(&mut self, tool: usize) {
@@ -747,9 +792,10 @@ impl FactorishState {
     }
 
     pub fn tool_inventory(&self) -> js_sys::Array {
-        tool_defs.iter().map(|tool|
-            JsValue::from(self.inventory[tool.item_name] as f64))
-        .collect()
+        tool_defs
+            .iter()
+            .map(|tool| JsValue::from(self.inventory[tool.item_name] as f64))
+            .collect()
     }
 
     #[wasm_bindgen]
@@ -758,8 +804,13 @@ impl FactorishState {
 
         context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
 
-        match self.image_dirt.as_ref().zip(self.image_ore.as_ref()) {
-            Some((img, img_ore)) => {
+        match self
+            .image_dirt
+            .as_ref()
+            .zip(self.image_ore.as_ref())
+            .zip(self.image_coal.as_ref())
+        {
+            Some(((img, img_ore), img_coal)) => {
                 for y in 0..self.viewport_height as u32 / 32 {
                     for x in 0..self.viewport_width as u32 / 32 {
                         context.draw_image_with_html_image_element(
@@ -767,13 +818,17 @@ impl FactorishState {
                             x as f64 * 32.,
                             y as f64 * 32.,
                         )?;
-                        let ore = self.board[(x + y * self.width) as usize].iron_ore;
-                        if 0 < ore {
-                            let idx = (ore / 10).min(3);
-                            // console_log!("x: {}, y: {}, idx: {}, ore: {}", x, y, idx, ore);
-                            context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                img_ore, (idx * 32) as f64, 0., 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
-                        }
+                        let draw_ore = |ore: u32, img: &HtmlImageElement| -> Result<(), JsValue> {
+                            if 0 < ore {
+                                let idx = (ore / 10).min(3);
+                                // console_log!("x: {}, y: {}, idx: {}, ore: {}", x, y, idx, ore);
+                                context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                    img, (idx * 32) as f64, 0., 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
+                            }
+                            Ok(())
+                        };
+                        draw_ore(self.board[(x + y * self.width) as usize].iron_ore, img_ore)?;
+                        draw_ore(self.board[(x + y * self.width) as usize].coal_ore, img_coal)?;
                     }
                 }
                 // console_log!(
@@ -791,12 +846,25 @@ impl FactorishState {
         }
 
         for item in &self.drop_items {
-            if let Some(ref img_iron_ore) = self.image_iron_ore {
-                context.draw_image_with_html_image_element(
-                    img_iron_ore,
-                    item.x as f64 - 8.,
-                    item.y as f64 - 8.,
-                )?;
+            match item.type_ {
+                ItemType::IronOre => {
+                    if let Some(ref img_iron_ore) = self.image_iron_ore {
+                        context.draw_image_with_html_image_element(
+                            img_iron_ore,
+                            item.x as f64 - 8.,
+                            item.y as f64 - 8.,
+                        )?;
+                    }
+                }
+                ItemType::CoalOre => {
+                    if let Some(ref img_coal_ore) = self.image_coal_ore {
+                        context.draw_image_with_html_image_element(
+                            img_coal_ore,
+                            item.x as f64 - 8.,
+                            item.y as f64 - 8.,
+                        )?;
+                    }
+                }
             }
         }
 
