@@ -72,6 +72,12 @@ struct Position {
     y: i32,
 }
 
+impl Position {
+    fn add(&self, o: (i32, i32)) -> Position{
+        Self{x: self.x + o.0, y: self.y + o.1}
+    }
+}
+
 enum Rotation {
     Left,
     Top,
@@ -87,6 +93,11 @@ impl Rotation {
             Rotation::Right => (1, 0),
             Rotation::Bottom => (0, 1),
         }
+    }
+
+    fn delta_inv(&self) -> (i32, i32) {
+        let delta = self.delta();
+        (-delta.0, -delta.1)
     }
 
     fn next(&mut self) {
@@ -145,10 +156,14 @@ struct ToolDef {
     item_name: &'static str,
     image: &'static str,
 }
-const tool_defs: [ToolDef; 2] = [
+const tool_defs: [ToolDef; 3] = [
     ToolDef {
         item_name: "TransportBelt",
         image: "img/transport.png",
+    },
+    ToolDef {
+        item_name: "Inserter",
+        image: "img/inserter-base.png",
     },
     ToolDef {
         item_name: "OreMine",
@@ -228,6 +243,81 @@ impl Structure for TransportBelt {
     }
 }
 
+struct Inserter {
+    position: Position,
+    rotation: Rotation,
+    cooldown: f64,
+}
+
+impl Inserter {
+    fn new(x: i32, y: i32, rotation: Rotation) -> Self {
+        Inserter {
+            position: Position { x, y },
+            rotation,
+            cooldown: 0.,
+        }
+    }
+}
+
+impl Structure for Inserter {
+    fn name(&self) -> &str {
+        "Inserter"
+    }
+
+    fn position(&self) -> &Position {
+        &self.position
+    }
+
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        match state.image_inserter.as_ref() {
+            Some(img) => {
+                context.draw_image_with_html_image_element(img, x, y)?;
+            }
+            None => return Err(JsValue::from_str("inserter image not available")),
+        }
+
+        match state.image_direction.as_ref() {
+            Some(img) => {
+                context.save();
+                context.translate(x + 16., y + 16.)?;
+                context.rotate(self.rotation.angle_rad())?;
+                context.translate(-(x + 16. + 4.) + 16., -(y + 16. + 8.) + 16.)?;
+                context.draw_image_with_html_image_element(img, x, y)?;
+                context.restore();
+            }
+            None => return Err(JsValue::from_str("direction image not available")),
+        }
+
+        Ok(())
+    }
+
+    fn frame_proc(&mut self, state: &mut FactorishState) {
+        if self.cooldown <= 1. {
+            self.cooldown = 0.;
+            let input_position = self.position.add(self.rotation.delta());
+            let output_position = self.position.add(self.rotation.delta_inv());
+            if let Some(&DropItem{type_, id, ..}) = state.find_item(&input_position) {
+                if state.new_object(output_position.x, output_position.y, type_).is_ok() {
+                    state.remove_item(id);
+                    self.cooldown += 20.;
+                }
+            }
+        } else {
+            self.cooldown -= 1.;
+        }
+    }
+
+    fn rotate(&mut self) -> Result<(), ()> {
+        self.rotation.next();
+        Ok(())
+    }
+}
+
 struct OreMine {
     position: Position,
     rotation: Rotation,
@@ -286,7 +376,7 @@ impl Structure for OreMine {
     fn desc(&self, state: &FactorishState) -> String {
         let tile = &state.board
             [self.position.x as usize + self.position.y as usize * state.width as usize];
-        if let Some(recipe) = self.recipe {
+        if let Some(_recipe) = self.recipe {
             let recipe_time = 80.;
             // Progress bar
             format!("{}{}{}{}",
@@ -417,6 +507,7 @@ pub struct FactorishState {
     image_coal: Option<HtmlImageElement>,
     image_belt: Option<HtmlImageElement>,
     image_mine: Option<HtmlImageElement>,
+    image_inserter: Option<HtmlImageElement>,
     image_direction: Option<HtmlImageElement>,
     image_iron_ore: Option<HtmlImageElement>,
     image_coal_ore: Option<HtmlImageElement>,
@@ -453,7 +544,7 @@ impl FactorishState {
             viewport_width: 0.,
             cursor: None,
             selected_tool: 0,
-            inventory: [("TransportBelt", 10usize), ("OreMine", 5usize)]
+            inventory: [("TransportBelt", 10usize), ("Inserter", 5usize), ("OreMine", 5usize)]
                 .iter()
                 .map(|(s, num)| (String::from(*s), *num))
                 .collect(),
@@ -463,6 +554,7 @@ impl FactorishState {
             image_coal: None,
             image_belt: None,
             image_mine: None,
+            image_inserter: None,
             image_direction: None,
             image_iron_ore: None,
             image_coal_ore: None,
@@ -591,8 +683,28 @@ impl FactorishState {
     //         .map(|s| s.as_mut())
     // }
 
-    fn find_structure(&self, pos: &[f64]) -> Option<&dyn Structure> {
+    fn _find_structure(&self, pos: &[f64]) -> Option<&dyn Structure> {
         self.find_structure_tile(&[(pos[0] / 32.) as i32, (pos[1] / 32.) as i32])
+    }
+
+    fn find_item(&self, pos: &Position) -> Option<&DropItem> {
+        self.drop_items.iter().find(|item| item.x / 32 == pos.x && item.y / 32 == pos.y)
+    }
+
+    fn remove_item(&mut self, id: u32) -> Option<DropItem> {
+        if let Some((i, _)) = self.drop_items.iter().enumerate().find(|item| item.1.id == id) {
+            Some(self.drop_items.remove(i))
+        } else {
+            None
+        }
+    }
+
+    fn _remove_item_pos(&mut self, pos: &Position) -> Option<DropItem> {
+        if let Some((i, _)) = self.drop_items.iter().enumerate().find(|item| item.1.x / 32 == pos.x && item.1.y / 32 == pos.y) {
+            Some(self.drop_items.remove(i))
+        } else {
+            None
+        }
     }
 
     fn update_info(&self) {
@@ -699,6 +811,7 @@ impl FactorishState {
                     self.harvest(&cursor);
                     self.structures.push(match self.selected_tool {
                         0 => Box::new(TransportBelt::new(cursor.x, cursor.y, Rotation::Left)),
+                        1 => Box::new(Inserter::new(cursor.x, cursor.y, Rotation::Left)),
                         _ => Box::new(OreMine::new(cursor.x, cursor.y, Rotation::Left)),
                     });
                     if let Some(count) = self
@@ -765,6 +878,7 @@ impl FactorishState {
         self.image_coal = Some(load_image("img/coal.png")?);
         self.image_belt = Some(load_image("img/transport.png")?);
         self.image_mine = Some(load_image("img/mine.png")?);
+        self.image_inserter = Some(load_image("img/inserter-base.png")?);
         self.image_direction = Some(load_image("img/direction.png")?);
         self.image_iron_ore = Some(load_image("img/ore.png")?);
         self.image_coal_ore = Some(load_image("img/coal-ore.png")?);
@@ -781,7 +895,7 @@ impl FactorishState {
     pub fn selected_tool(&self) -> js_sys::Array {
         [
             JsValue::from(self.selected_tool as f64),
-            JsValue::from(self.inventory[tool_defs[self.selected_tool].item_name] as f64),
+            JsValue::from(*self.inventory.get(tool_defs[self.selected_tool].item_name).unwrap_or(&0) as f64),
         ]
         .iter()
         .collect()
@@ -794,7 +908,7 @@ impl FactorishState {
     pub fn tool_inventory(&self) -> js_sys::Array {
         tool_defs
             .iter()
-            .map(|tool| JsValue::from(self.inventory[tool.item_name] as f64))
+            .map(|tool| JsValue::from(*self.inventory.get(tool.item_name).unwrap_or(&0) as f64))
             .collect()
     }
 
@@ -872,11 +986,12 @@ impl FactorishState {
             let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);
             if let Some(img) = match self.selected_tool {
                 0 => self.image_belt.as_ref(),
+                1 => self.image_inserter.as_ref(),
                 _ => self.image_mine.as_ref(),
             } {
                 context.save();
                 context.set_global_alpha(0.5);
-                context.draw_image_with_html_image_element(img, x, y);
+                context.draw_image_with_html_image_element(img, x, y)?;
                 context.restore();
             }
             context.set_stroke_style(&JsValue::from_str("blue"));
