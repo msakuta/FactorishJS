@@ -74,8 +74,11 @@ struct Position {
 }
 
 impl Position {
-    fn add(&self, o: (i32, i32)) -> Position{
-        Self{x: self.x + o.0, y: self.y + o.1}
+    fn add(&self, o: (i32, i32)) -> Position {
+        Self {
+            x: self.x + o.0,
+            y: self.y + o.1,
+        }
     }
 }
 
@@ -126,6 +129,7 @@ impl Rotation {
 
 enum ItemResponse {
     Move(i32, i32),
+    Consume,
 }
 
 trait Structure {
@@ -302,8 +306,27 @@ impl Structure for Inserter {
             self.cooldown = 0.;
             let input_position = self.position.add(self.rotation.delta());
             let output_position = self.position.add(self.rotation.delta_inv());
-            if let Some(&DropItem{type_, id, ..}) = state.find_item(&input_position) {
-                if state.new_object(output_position.x, output_position.y, type_).is_ok() {
+            if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
+                if state
+                    .new_object(output_position.x, output_position.y, type_)
+                    .is_ok()
+                    || {
+                        if let Some(structure_idx) =
+                            state.find_structure_tile_idx(&[output_position.x, output_position.y])
+                        {
+                            state.structures[structure_idx]
+                                .item_response(&DropItem::new(
+                                    &mut state.serial_no,
+                                    type_,
+                                    output_position.x,
+                                    output_position.y,
+                                ))
+                                .is_ok()
+                        } else {
+                            false
+                        }
+                    }
+                {
                     state.remove_item(id);
                     self.cooldown += 20.;
                 }
@@ -319,11 +342,19 @@ impl Structure for Inserter {
     }
 }
 
+struct Recipe {
+    item_type: ItemType,
+    power_cost: f64,
+    recipe_time: f64,
+}
+
 struct OreMine {
     position: Position,
     rotation: Rotation,
     cooldown: f64,
-    recipe: Option<ItemType>,
+    power: f64,
+    max_power: f64,
+    recipe: Option<Recipe>,
 }
 
 impl OreMine {
@@ -332,6 +363,8 @@ impl OreMine {
             position: Position { x, y },
             rotation,
             cooldown: 0.,
+            power: 20.,
+            max_power: 20.,
             recipe: None,
         }
     }
@@ -377,16 +410,17 @@ impl Structure for OreMine {
     fn desc(&self, state: &FactorishState) -> String {
         let tile = &state.board
             [self.position.x as usize + self.position.y as usize * state.width as usize];
-        if let Some(_recipe) = self.recipe {
+        if let Some(_recipe) = &self.recipe {
             let recipe_time = 80.;
             // Progress bar
-            format!("{}{}{}{}",
+            format!("{}{}{}{}{}",
                 format!("Progress: {:.0}%<br>", (recipe_time - self.cooldown) / recipe_time * 100.),
                 "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
                 format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
                     (recipe_time - self.cooldown) / recipe_time * 100.),
-                // "Power: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>" +
-                // "<div style='position: absolute; width: " + (this.maxPower ? (this.power) / this.maxPower * 100 : 0) + "px; height: 10px; background-color: #ff00ff'></div></div>" +
+                format!(r#"Power: <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
+                 <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
+                  if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
                 format!("Expected output: {}", if 0 < tile.iron_ore { tile.iron_ore } else { tile.coal_ore }))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
@@ -402,12 +436,20 @@ impl Structure for OreMine {
             return;
         }
         let tile = otile.unwrap();
-        let recipe_time = 80.;
+
         if self.recipe.is_none() {
             if 0 < tile.iron_ore {
-                self.recipe = Some(ItemType::IronOre);
+                self.recipe = Some(Recipe {
+                    item_type: ItemType::IronOre,
+                    power_cost: 0.1,
+                    recipe_time: 80.,
+                });
             } else if 0 < tile.coal_ore {
-                self.recipe = Some(ItemType::CoalOre);
+                self.recipe = Some(Recipe {
+                    item_type: ItemType::CoalOre,
+                    power_cost: 0.1,
+                    recipe_time: 80.,
+                });
             }
         }
         if let Some(recipe) = &self.recipe {
@@ -423,7 +465,7 @@ impl Structure for OreMine {
             // }
 
             // Proceed only if we have sufficient energy in the buffer.
-            let progress = 1.; //Math.min(this.power / this.recipe.powerCost, 1);
+            let progress = (self.power / recipe.power_cost).min(1.);
             if self.cooldown < progress {
                 self.cooldown = 0.;
                 let (vx, vy) = self.rotation.delta();
@@ -431,12 +473,12 @@ impl Structure for OreMine {
                 let dy = self.position.y + vy;
                 if !state.hit_check(dx, dy, None) {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
-                    if let Err(_code) = state.new_object(dx, dy, *recipe) {
+                    if let Err(_code) = state.new_object(dx, dy, recipe.item_type) {
                         // console_log!("Failed to create object: {:?}", code);
                     } else {
                         if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y]) {
-                            self.cooldown = recipe_time;
-                            match recipe {
+                            self.cooldown = recipe.recipe_time;
+                            match recipe.item_type {
                                 ItemType::IronOre => tile.iron_ore -= 1,
                                 ItemType::CoalOre => tile.coal_ore -= 1,
                             }
@@ -445,7 +487,7 @@ impl Structure for OreMine {
                 }
             } else {
                 self.cooldown -= progress;
-                // self.power -= progress * self.recipe.powerCost;
+                self.power -= progress * recipe.power_cost;
             }
         }
     }
@@ -454,9 +496,19 @@ impl Structure for OreMine {
         self.rotation.next();
         Ok(())
     }
+
+    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponse, ()> {
+        if item.type_ == ItemType::CoalOre && self.power == 0. {
+            self.max_power = 100.;
+            self.power = 100.;
+            Ok(ItemResponse::Consume)
+        } else {
+            Err(())
+        }
+    }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 enum ItemType {
     IronOre,
     CoalOre,
@@ -545,10 +597,14 @@ impl FactorishState {
             viewport_width: 0.,
             cursor: None,
             selected_tool: 0,
-            inventory: [("TransportBelt", 10usize), ("Inserter", 5usize), ("OreMine", 5usize)]
-                .iter()
-                .map(|(s, num)| (String::from(*s), *num))
-                .collect(),
+            inventory: [
+                ("TransportBelt", 10usize),
+                ("Inserter", 5usize),
+                ("OreMine", 5usize),
+            ]
+            .iter()
+            .map(|(s, num)| (String::from(*s), *num))
+            .collect(),
             info_elem: None,
             image_dirt: None,
             image_ore: None,
@@ -605,6 +661,7 @@ impl FactorishState {
             structure.frame_proc(self);
         }
         // let mut drop_items = std::mem::take(&mut self.drop_items);
+        let mut to_remove = vec![];
         for i in 0..self.drop_items.len() {
             let item = &self.drop_items[i];
             if 0 < item.x
@@ -612,20 +669,31 @@ impl FactorishState {
                 && 0 < item.y
                 && item.y < self.height as i32 * tilesize
             {
-                if let Some(ItemResponse::Move(moved_x, moved_y)) = structures
+                match structures
                     .iter_mut()
                     .find(|s| s.position().x == item.x / 32 && s.position().y == item.y / 32)
                     .and_then(|structure| structure.item_response(item).ok())
                 {
-                    if self.hit_check(moved_x, moved_y, Some(item.id)) {
-                        continue;
+                    Some(ItemResponse::Move(moved_x, moved_y)) => {
+                        if self.hit_check(moved_x, moved_y, Some(item.id)) {
+                            continue;
+                        }
+                        let item = &mut self.drop_items[i];
+                        item.x = moved_x;
+                        item.y = moved_y;
                     }
-                    let item = &mut self.drop_items[i];
-                    item.x = moved_x;
-                    item.y = moved_y;
+                    Some(ItemResponse::Consume) => {
+                        to_remove.push(item.id);
+                    }
+                    _ => {}
                 }
             }
         }
+
+        for id in to_remove {
+            self.remove_item(id);
+        }
+
         self.structures = structures;
         // self.drop_items = drop_items;
         self.update_info();
@@ -689,11 +757,18 @@ impl FactorishState {
     }
 
     fn find_item(&self, pos: &Position) -> Option<&DropItem> {
-        self.drop_items.iter().find(|item| item.x / 32 == pos.x && item.y / 32 == pos.y)
+        self.drop_items
+            .iter()
+            .find(|item| item.x / 32 == pos.x && item.y / 32 == pos.y)
     }
 
     fn remove_item(&mut self, id: u32) -> Option<DropItem> {
-        if let Some((i, _)) = self.drop_items.iter().enumerate().find(|item| item.1.id == id) {
+        if let Some((i, _)) = self
+            .drop_items
+            .iter()
+            .enumerate()
+            .find(|item| item.1.id == id)
+        {
             Some(self.drop_items.remove(i))
         } else {
             None
@@ -701,7 +776,12 @@ impl FactorishState {
     }
 
     fn _remove_item_pos(&mut self, pos: &Position) -> Option<DropItem> {
-        if let Some((i, _)) = self.drop_items.iter().enumerate().find(|item| item.1.x / 32 == pos.x && item.1.y / 32 == pos.y) {
+        if let Some((i, _)) = self
+            .drop_items
+            .iter()
+            .enumerate()
+            .find(|item| item.1.x / 32 == pos.x && item.1.y / 32 == pos.y)
+        {
             Some(self.drop_items.remove(i))
         } else {
             None
@@ -896,7 +976,12 @@ impl FactorishState {
     pub fn selected_tool(&self) -> js_sys::Array {
         [
             JsValue::from(self.selected_tool as f64),
-            JsValue::from(*self.inventory.get(tool_defs[self.selected_tool].item_name).unwrap_or(&0) as f64),
+            JsValue::from(
+                *self
+                    .inventory
+                    .get(tool_defs[self.selected_tool].item_name)
+                    .unwrap_or(&0) as f64,
+            ),
         ]
         .iter()
         .collect()
