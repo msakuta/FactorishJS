@@ -1,3 +1,4 @@
+#![allow(non_upper_case_globals)]
 mod perlin_noise;
 mod utils;
 
