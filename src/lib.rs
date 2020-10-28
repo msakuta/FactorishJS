@@ -82,6 +82,7 @@ impl Position {
     }
 }
 
+#[derive(Copy, Clone)]
 enum Rotation {
     Left,
     Top,
@@ -114,11 +115,15 @@ impl Rotation {
     }
 
     fn angle_deg(&self) -> i32 {
+        self.angle_4() * 90
+    }
+
+    fn angle_4(&self) -> i32 {
         match self {
-            Rotation::Left => 180,
-            Rotation::Top => 270,
-            Rotation::Right => 00,
-            Rotation::Bottom => 90,
+            Rotation::Left => 2,
+            Rotation::Top => 3,
+            Rotation::Right => 0,
+            Rotation::Bottom => 1,
         }
     }
 
@@ -148,6 +153,9 @@ trait Structure {
         false
     }
     fn rotate(&mut self) -> Result<(), ()> {
+        Err(())
+    }
+    fn set_rotation(&mut self, _rotation: &Rotation) -> Result<(), ()> {
         Err(())
     }
     /// Called every frame for each item that is on this structure.
@@ -238,6 +246,11 @@ impl Structure for TransportBelt {
 
     fn rotate(&mut self) -> Result<(), ()> {
         self.rotation.next();
+        Ok(())
+    }
+
+    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
+        self.rotation = *rotation;
         Ok(())
     }
 
@@ -338,6 +351,11 @@ impl Structure for Inserter {
 
     fn rotate(&mut self) -> Result<(), ()> {
         self.rotation.next();
+        Ok(())
+    }
+
+    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
+        self.rotation = *rotation;
         Ok(())
     }
 }
@@ -497,6 +515,11 @@ impl Structure for OreMine {
         Ok(())
     }
 
+    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
+        self.rotation = *rotation;
+        Ok(())
+    }
+
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponse, ()> {
         if item.type_ == ItemType::CoalOre && self.power == 0. {
             self.max_power = 100.;
@@ -549,6 +572,7 @@ pub struct FactorishState {
     drop_items: Vec<DropItem>,
     serial_no: u32,
     selected_tool: usize,
+    tool_rotation: Rotation,
     inventory: HashMap<String, usize>,
 
     // rendering states
@@ -597,6 +621,7 @@ impl FactorishState {
             viewport_width: 0.,
             cursor: None,
             selected_tool: 0,
+            tool_rotation: Rotation::Left,
             inventory: [
                 ("TransportBelt", 10usize),
                 ("Inserter", 5usize),
@@ -878,6 +903,18 @@ impl FactorishState {
         }
     }
 
+    fn new_structure(
+        &self,
+        tool_index: usize,
+        cursor: &Position,
+    ) -> Result<Box<dyn Structure>, JsValue> {
+        Ok(match tool_index {
+            0 => Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation)),
+            1 => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
+            _ => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
+        })
+    }
+
     pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<(), JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
@@ -890,11 +927,8 @@ impl FactorishState {
             if let Some(count) = self.inventory.get(tool_defs[self.selected_tool].item_name) {
                 if 1 <= *count {
                     self.harvest(&cursor);
-                    self.structures.push(match self.selected_tool {
-                        0 => Box::new(TransportBelt::new(cursor.x, cursor.y, Rotation::Left)),
-                        1 => Box::new(Inserter::new(cursor.x, cursor.y, Rotation::Left)),
-                        _ => Box::new(OreMine::new(cursor.x, cursor.y, Rotation::Left)),
-                    });
+                    self.structures
+                        .push(self.new_structure(self.selected_tool, &cursor)?);
                     if let Some(count) = self
                         .inventory
                         .get_mut(tool_defs[self.selected_tool].item_name)
@@ -973,6 +1007,7 @@ impl FactorishState {
             .collect::<js_sys::Array>())
     }
 
+    /// Returns 2-array with [selected_tool, inventory_count]
     pub fn selected_tool(&self) -> js_sys::Array {
         [
             JsValue::from(self.selected_tool as f64),
@@ -987,8 +1022,25 @@ impl FactorishState {
         .collect()
     }
 
+    pub fn render_tool(
+        &self,
+        tool_index: usize,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        let mut tool = self.new_structure(tool_index, &Position { x: 0, y: 0 })?;
+        tool.set_rotation(&self.tool_rotation)
+            .or_else(|_| Err(JsValue::from_str("rotation failed")))?;
+        tool.draw(self, context)?;
+        Ok(())
+    }
+
     pub fn select_tool(&mut self, tool: usize) {
         self.selected_tool = tool;
+    }
+
+    pub fn rotate_tool(&mut self) -> i32 {
+        self.tool_rotation.next();
+        self.tool_rotation.angle_4()
     }
 
     pub fn tool_inventory(&self) -> js_sys::Array {

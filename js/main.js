@@ -56,6 +56,7 @@ window.onload = async function(){
     toolBarElem.style.width = ((toolDefs.length + 1) * tilesize + 8) + 'px';
     toolBarElem.style.height = (tilesize + 8) + 'px';
     container.appendChild(toolBarElem);
+    var toolBarCanvases = [];
     for(var i = 0; i < toolDefs.length; i++){
         var toolContainer = document.createElement('span');
         toolContainer.style.position = 'absolute';
@@ -72,8 +73,12 @@ window.onload = async function(){
         overlay.setAttribute('class', 'overlay noselect');
         overlay.innerHTML = '0';
 
-        var toolElem = document.createElement("div");
+        var toolElem = document.createElement("canvas");
         toolElems.push(toolElem);
+        toolElem.width = 32;
+        toolElem.height = 32;
+        toolElem.style.left = '0px';
+        toolElem.style.top = '0px';
         toolElem.style.width = '31px';
         toolElem.style.height = '31px';
         toolElem.style.position = 'absolute';
@@ -112,15 +117,42 @@ window.onload = async function(){
         toolElem.onmouseleave = function(e){
             // toolTip.style.display = 'none';
         };
-        toolElem.style.backgroundImage = 'url(' + toolDefs[i] + ')';
         toolContainer.appendChild(toolElem);
-		toolContainer.appendChild(overlay);
-		toolBarElem.appendChild(toolContainer);
+        toolBarCanvases.push(toolElem);
+        toolContainer.appendChild(overlay);
+        toolBarElem.appendChild(toolContainer);
     }
-	// Set the margin after contents are initialized
-	toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
+    var rotateButton = document.createElement('div');
+    rotateButton.style.width = '31px';
+    rotateButton.style.height = '31px';
+    rotateButton.style.position = 'relative';
+    rotateButton.style.top = '4px';
+    rotateButton.style.left = (32.0 * i + 4) + 'px';
+    rotateButton.style.border = '1px blue solid';
+    rotateButton.style.backgroundImage = 'url("img/rotate.png")';
+    rotateButton.onmousedown = function(e){
+        rotate();
+    }
+    toolBarElem.appendChild(rotateButton);
+    // Set the margin after contents are initialized
+    toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
     sim.render_init(canvas, infoElem);
+
+    updateToolBarImage();
+
+    function updateToolBarImage(){
+        for(var i = 0; i < toolBarCanvases.length; i++){
+            var canvasElem = toolBarCanvases[i];
+            var context = canvasElem.getContext('2d');
+            sim.render_tool(i, context);
+        }
+    }
+
+    function rotate(){
+        var newRotation = sim.rotate_tool();
+        updateToolBarImage();
+    }
 
     function updateToolBar(){
         var inventory = sim.tool_inventory();
