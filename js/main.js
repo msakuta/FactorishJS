@@ -179,7 +179,8 @@ window.onload = async function(){
     });
 
     function onKeyDown(event){
-        sim.on_key_down(event.keyCode);
+        if(sim.on_key_down(event.keyCode))
+            updateToolBarImage();
     }
     window.addEventListener( 'keydown', onKeyDown, false );
 

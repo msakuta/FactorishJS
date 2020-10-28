@@ -853,15 +853,21 @@ impl FactorishState {
         false
     }
 
-    fn rotate(&mut self) -> Result<(), RotateErr> {
-        if let Some(ref cursor) = self.cursor {
-            if let Some(idx) = self.find_structure_tile_idx(cursor) {
-                return Ok(self.structures[idx]
-                    .rotate()
-                    .map_err(|()| RotateErr::NotSupported)?);
+    fn rotate(&mut self) -> Result<bool, RotateErr> {
+        if let Some(_selected_tool) = self.selected_tool {
+            self.tool_rotation.next();
+            Ok(true)
+        } else {
+            if let Some(ref cursor) = self.cursor {
+                if let Some(idx) = self.find_structure_tile_idx(cursor) {
+                    return Ok(self.structures[idx]
+                        .rotate()
+                        .map_err(|()| RotateErr::NotSupported)
+                        .map(|_| false)?);
+                }
             }
+            Err(RotateErr::NotFound)
         }
-        Err(RotateErr::NotFound)
     }
 
     /// Insert an object on the board.  It could fail if there's already some object at the position.
@@ -966,12 +972,13 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn on_key_down(&mut self, key_code: i32) -> Result<(), JsValue> {
+    pub fn on_key_down(&mut self, key_code: i32) -> Result<bool, JsValue> {
         if key_code == 82 {
             self.rotate()
-                .map_err(|err| JsValue::from(format!("Rotate failed: {:?}", err)))?;
+                .map_err(|err| JsValue::from(format!("Rotate failed: {:?}", err)))
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 
     pub fn render_init(
