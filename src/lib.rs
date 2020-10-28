@@ -261,6 +261,26 @@ impl Structure for TransportBelt {
     }
 }
 
+fn draw_direction_arrow(
+    (x, y): (f64, f64),
+    rotation: &Rotation,
+    state: &FactorishState,
+    context: &CanvasRenderingContext2d,
+) -> Result<(), JsValue> {
+    match state.image_direction.as_ref() {
+        Some(img) => {
+            context.save();
+            context.translate(x + 16., y + 16.)?;
+            context.rotate(rotation.angle_rad() + std::f64::consts::PI)?;
+            context.translate(-(x + 16. + 4.) + 16., -(y + 16. + 8.) + 16.)?;
+            context.draw_image_with_html_image_element(img, x, y)?;
+            context.restore();
+        }
+        None => return Err(JsValue::from_str("direction image not available")),
+    };
+    Ok(())
+}
+
 struct Inserter {
     position: Position,
     rotation: Rotation,
@@ -299,17 +319,7 @@ impl Structure for Inserter {
             None => return Err(JsValue::from_str("inserter image not available")),
         }
 
-        match state.image_direction.as_ref() {
-            Some(img) => {
-                context.save();
-                context.translate(x + 16., y + 16.)?;
-                context.rotate(self.rotation.angle_rad())?;
-                context.translate(-(x + 16. + 4.) + 16., -(y + 16. + 8.) + 16.)?;
-                context.draw_image_with_html_image_element(img, x, y)?;
-                context.restore();
-            }
-            None => return Err(JsValue::from_str("direction image not available")),
-        }
+        draw_direction_arrow((x, y), &self.rotation, state, context)?;
 
         Ok(())
     }
@@ -317,8 +327,8 @@ impl Structure for Inserter {
     fn frame_proc(&mut self, state: &mut FactorishState) {
         if self.cooldown <= 1. {
             self.cooldown = 0.;
-            let input_position = self.position.add(self.rotation.delta());
-            let output_position = self.position.add(self.rotation.delta_inv());
+            let input_position = self.position.add(self.rotation.delta_inv());
+            let output_position = self.position.add(self.rotation.delta());
             if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
                 if state
                     .new_object(output_position.x, output_position.y, type_)
@@ -410,17 +420,7 @@ impl Structure for OreMine {
             None => return Err(JsValue::from_str("mine image not available")),
         }
 
-        match state.image_direction.as_ref() {
-            Some(img) => {
-                context.save();
-                context.translate(x + 16., y + 16.)?;
-                context.rotate(self.rotation.angle_rad())?;
-                context.translate(-(x + 16. + 4.) + 16., -(y + 16. + 8.) + 16.)?;
-                context.draw_image_with_html_image_element(img, x, y)?;
-                context.restore();
-            }
-            None => return Err(JsValue::from_str("direction image not available")),
-        }
+        draw_direction_arrow((x, y), &self.rotation, state, context)?;
 
         Ok(())
     }
