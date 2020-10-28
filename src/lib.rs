@@ -486,12 +486,12 @@ impl Structure for OreMine {
             let progress = (self.power / recipe.power_cost).min(1.);
             if self.cooldown < progress {
                 self.cooldown = 0.;
-                let (vx, vy) = self.rotation.delta();
-                let dx = self.position.x + vx;
-                let dy = self.position.y + vy;
-                if !state.hit_check(dx, dy, None) {
+                let output_position = self.position.add(self.rotation.delta());
+                if !state.hit_check(output_position.x, output_position.y, None) {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
-                    if let Err(_code) = state.new_object(dx, dy, recipe.item_type) {
+                    if let Err(_code) =
+                        state.new_object(output_position.x, output_position.y, recipe.item_type)
+                    {
                         // console_log!("Failed to create object: {:?}", code);
                     } else {
                         if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y]) {
@@ -571,7 +571,7 @@ pub struct FactorishState {
     structures: Vec<Box<dyn Structure>>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
-    selected_tool: usize,
+    selected_tool: Option<usize>,
     tool_rotation: Rotation,
     inventory: HashMap<String, usize>,
 
@@ -620,7 +620,7 @@ impl FactorishState {
             viewport_height: 0.,
             viewport_width: 0.,
             cursor: None,
-            selected_tool: 0,
+            selected_tool: None,
             tool_rotation: Rotation::Left,
             inventory: [
                 ("TransportBelt", 10usize),
@@ -924,16 +924,17 @@ impl FactorishState {
             y: (pos[1] / 32.) as i32,
         };
         if button == 0 {
-            if let Some(count) = self.inventory.get(tool_defs[self.selected_tool].item_name) {
-                if 1 <= *count {
-                    self.harvest(&cursor);
-                    self.structures
-                        .push(self.new_structure(self.selected_tool, &cursor)?);
-                    if let Some(count) = self
-                        .inventory
-                        .get_mut(tool_defs[self.selected_tool].item_name)
-                    {
-                        *count -= 1;
+            if let Some(selected_tool) = self.selected_tool {
+                if let Some(count) = self.inventory.get(tool_defs[selected_tool].item_name) {
+                    if 1 <= *count {
+                        self.harvest(&cursor);
+                        self.structures
+                            .push(self.new_structure(selected_tool, &cursor)?);
+                        if let Some(count) =
+                            self.inventory.get_mut(tool_defs[selected_tool].item_name)
+                        {
+                            *count -= 1;
+                        }
                     }
                 }
             }
@@ -1009,17 +1010,21 @@ impl FactorishState {
 
     /// Returns 2-array with [selected_tool, inventory_count]
     pub fn selected_tool(&self) -> js_sys::Array {
-        [
-            JsValue::from(self.selected_tool as f64),
-            JsValue::from(
-                *self
-                    .inventory
-                    .get(tool_defs[self.selected_tool].item_name)
-                    .unwrap_or(&0) as f64,
-            ),
-        ]
-        .iter()
-        .collect()
+        if let Some(selected_tool) = self.selected_tool {
+            [
+                JsValue::from(selected_tool as f64),
+                JsValue::from(
+                    *self
+                        .inventory
+                        .get(tool_defs[selected_tool].item_name)
+                        .unwrap_or(&0) as f64,
+                ),
+            ]
+            .iter()
+            .collect()
+        } else {
+            js_sys::Array::new()
+        }
     }
 
     pub fn render_tool(
@@ -1034,8 +1039,15 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn select_tool(&mut self, tool: usize) {
-        self.selected_tool = tool;
+    pub fn select_tool(&mut self, tool: i32) -> bool {
+        self.selected_tool = if 0 <= tool
+            && !(self.selected_tool.is_some() && self.selected_tool.unwrap() as i32 == tool)
+        {
+            Some(tool as usize)
+        } else {
+            None
+        };
+        self.selected_tool.is_some()
     }
 
     pub fn rotate_tool(&mut self) -> i32 {
@@ -1122,15 +1134,17 @@ impl FactorishState {
 
         if let Some(ref cursor) = self.cursor {
             let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);
-            if let Some(img) = match self.selected_tool {
-                0 => self.image_belt.as_ref(),
-                1 => self.image_inserter.as_ref(),
-                _ => self.image_mine.as_ref(),
-            } {
-                context.save();
-                context.set_global_alpha(0.5);
-                context.draw_image_with_html_image_element(img, x, y)?;
-                context.restore();
+            if let Some(selected_tool) = self.selected_tool {
+                if let Some(img) = match selected_tool {
+                    0 => self.image_belt.as_ref(),
+                    1 => self.image_inserter.as_ref(),
+                    _ => self.image_mine.as_ref(),
+                } {
+                    context.save();
+                    context.set_global_alpha(0.5);
+                    context.draw_image_with_html_image_element(img, x, y)?;
+                    context.restore();
+                }
             }
             context.set_stroke_style(&JsValue::from_str("blue"));
             context.set_line_width(2.);

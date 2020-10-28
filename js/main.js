@@ -85,7 +85,7 @@ window.onload = async function(){
         toolElem.style.textAlign = 'center';
         toolElem.onmousedown = function(e){
             var currentTool = toolElems.indexOf(this);
-            sim.select_tool(currentTool);
+            var state = sim.select_tool(currentTool);
             if(!toolCursorElem){
                 toolCursorElem = document.createElement('div');
                 toolCursorElem.style.border = '2px blue solid';
@@ -97,7 +97,7 @@ window.onload = async function(){
             toolCursorElem.style.left = (tilesize * currentTool + 4) + 'px';
             toolCursorElem.style.width = '30px';
             toolCursorElem.style.height = '30px';
-            toolCursorElem.style.display = 'block';
+            toolCursorElem.style.display = state ? 'block' : 'none';
         }
         toolElem.onmouseenter = function(e){
             var idx = toolElems.indexOf(this);
