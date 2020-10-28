@@ -82,6 +82,12 @@ impl Position {
     }
 }
 
+impl From<&[i32; 2]> for Position {
+    fn from(xy: &[i32; 2]) -> Self {
+        Self { x: xy[0], y: xy[1] }
+    }
+}
+
 #[derive(Copy, Clone)]
 enum Rotation {
     Left,
@@ -1142,16 +1148,13 @@ impl FactorishState {
         if let Some(ref cursor) = self.cursor {
             let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);
             if let Some(selected_tool) = self.selected_tool {
-                if let Some(img) = match selected_tool {
-                    0 => self.image_belt.as_ref(),
-                    1 => self.image_inserter.as_ref(),
-                    _ => self.image_mine.as_ref(),
-                } {
-                    context.save();
-                    context.set_global_alpha(0.5);
-                    context.draw_image_with_html_image_element(img, x, y)?;
-                    context.restore();
-                }
+                context.save();
+                context.set_global_alpha(0.5);
+                let mut tool = self.new_structure(selected_tool, &Position::from(cursor))?;
+                tool.set_rotation(&self.tool_rotation)
+                    .map_err(|_| JsValue::from_str("Couldn't rotate struct"))?;
+                tool.draw(self, &context)?;
+                context.restore();
             }
             context.set_stroke_style(&JsValue::from_str("blue"));
             context.set_line_width(2.);
