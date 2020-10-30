@@ -67,7 +67,7 @@ struct Cell {
     coal_ore: u32,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 struct Position {
     x: i32,
     y: i32,
@@ -154,7 +154,12 @@ trait Structure {
     fn desc(&self, _state: &FactorishState) -> String {
         String::from("")
     }
-    fn frame_proc(&mut self, _state: &mut FactorishState) {}
+    fn frame_proc(
+        &mut self,
+        _state: &mut FactorishState,
+        _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+    ) {
+    }
     fn movable(&self) -> bool {
         false
     }
@@ -166,6 +171,13 @@ trait Structure {
     }
     /// Called every frame for each item that is on this structure.
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponse, ()> {
+        Err(())
+    }
+    fn output<'a>(
+        &'a mut self,
+        _state: &mut FactorishState,
+        _position: &Position,
+    ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
         Err(())
     }
 }
@@ -334,34 +346,60 @@ impl Structure for Inserter {
         Ok(())
     }
 
-    fn frame_proc(&mut self, state: &mut FactorishState) {
+    fn frame_proc(
+        &mut self,
+        state: &mut FactorishState,
+        structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+    ) {
         if self.cooldown <= 1. {
             self.cooldown = 0.;
             let input_position = self.position.add(self.rotation.delta_inv());
             let output_position = self.position.add(self.rotation.delta());
-            if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
-                if state
-                    .new_object(output_position.x, output_position.y, type_)
-                    .is_ok()
-                    || {
-                        if let Some(structure_idx) =
-                            state.find_structure_tile_idx(&[output_position.x, output_position.y])
-                        {
-                            state.structures[structure_idx]
-                                .item_response(&DropItem::new(
-                                    &mut state.serial_no,
-                                    type_,
-                                    output_position.x,
-                                    output_position.y,
-                                ))
-                                .is_ok()
-                        } else {
-                            false
-                        }
-                    }
+
+            let mut try_output = |state: &mut FactorishState, type_| -> bool {
+                if let Some(structure_idx) =
+                    state.find_structure_tile_idx(&[output_position.x, output_position.y])
                 {
-                    state.remove_item(id);
+                    console_log!(
+                        "found structure to output: {}, {}, {}",
+                        output_position.x,
+                        output_position.y,
+                        structure_idx
+                    );
+                    state.structures[structure_idx]
+                        .item_response(&DropItem::new(
+                            &mut state.serial_no,
+                            type_,
+                            output_position.x,
+                            output_position.y,
+                        ))
+                        .is_ok()
+                } else if let Ok(()) = state.new_object(output_position.x, output_position.y, type_)
+                {
                     self.cooldown += 20.;
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
+                if try_output(state, type_) {
+                    state.remove_item(id);
+                } else {
+                    console_log!("fail output_object: {:?}", type_);
+                }
+            } else if let Some((_, structure)) = structures.enumerate().find(|(_, s)| {
+                s.position().x == input_position.x && s.position().y == input_position.y
+            }) {
+                console_log!("outputting: {:?}", structure.position());
+                if let Ok((item, callback)) = structure.output(state, &output_position) {
+                    if try_output(state, item.type_) {
+                        callback(&item);
+                        console_log!("output succeeded: {:?}", item.type_);
+                    }
+                } else {
+                    console_log!("output failed");
                 }
             }
         } else {
@@ -382,14 +420,17 @@ impl Structure for Inserter {
 
 const CHEST_CAPACITY: usize = 100;
 
-struct Chest{
+struct Chest {
     position: Position,
     inventory: HashMap<String, i32>,
 }
 
-impl Chest{
-    fn new(position: &Position) -> Self{
-        Chest{position: *position, inventory: HashMap::new()}
+impl Chest {
+    fn new(position: &Position) -> Self {
+        Chest {
+            position: *position,
+            inventory: HashMap::new(),
+        }
     }
 }
 
@@ -404,12 +445,12 @@ fn str_to_item(name: &str) -> Option<ItemType> {
     match name {
         "IronOre" => Some(ItemType::IronOre),
         "CoalOre" => Some(ItemType::CoalOre),
-        _ => None
+        _ => None,
     }
 }
 
-impl Structure for Chest{
-    fn name(&self) -> &'static str{
+impl Structure for Chest {
+    fn name(&self) -> &'static str {
         "Chest"
     }
 
@@ -417,7 +458,11 @@ impl Structure for Chest{
         &self.position
     }
 
-    fn draw(&self, state: &FactorishState, context: &CanvasRenderingContext2d) -> Result<(), JsValue> {
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_chest.as_ref() {
             Some(img) => {
@@ -428,23 +473,55 @@ impl Structure for Chest{
         }
     }
 
-    fn desc(&self, state: &FactorishState) -> String {
-        format!("Items: \n{}",
-            self.inventory.iter().map(|item| 
-                format!("{}: {}<br>", item.0, item.1))
-                .fold(String::from(""), |accum, item| accum + &item))
+    fn desc(&self, _state: &FactorishState) -> String {
+        format!(
+            "Items: \n{}",
+            self.inventory
+                .iter()
+                .map(|item| format!("{}: {}<br>", item.0, item.1))
+                .fold(String::from(""), |accum, item| accum + &item)
+        )
     }
 
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponse, ()> {
         if self.inventory.len() < CHEST_CAPACITY {
             if let Some(item_ref) = self.inventory.get_mut(&item_to_str(&_item.type_)) {
                 *item_ref += 1;
-            }
-            else {
+            } else {
                 self.inventory.insert(item_to_str(&_item.type_), 1);
             }
             Ok(ItemResponse::Consume)
-        } else{
+        } else {
+            Err(())
+        }
+    }
+
+    fn output<'a>(
+        &'a mut self,
+        state: &mut FactorishState,
+        position: &Position,
+    ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
+        if let Some(ref mut item) = self.inventory.iter_mut().next() {
+            if 0 < *item.1 {
+                let item_name = item.0.clone();
+                Ok((
+                    DropItem {
+                        id: state.serial_no,
+                        type_: str_to_item(&item.0).ok_or(())?,
+                        x: position.x * 32,
+                        y: position.y * 32,
+                    },
+                    Box::new(move |_| {
+                        if let Some(item) = self.inventory.iter_mut().find(|it| *it.0 == item_name)
+                        {
+                            *item.1 -= 1
+                        }
+                    }),
+                ))
+            } else {
+                Err(())
+            }
+        } else {
             Err(())
         }
     }
@@ -528,7 +605,11 @@ impl Structure for OreMine {
         }
     }
 
-    fn frame_proc(&mut self, state: &mut FactorishState) {
+    fn frame_proc(
+        &mut self,
+        state: &mut FactorishState,
+        _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+    ) {
         let otile = &state.tile_at(&[self.position.x, self.position.y]);
         if otile.is_none() {
             return;
@@ -611,7 +692,7 @@ impl Structure for OreMine {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 enum ItemType {
     IronOre,
     CoalOre,
@@ -765,9 +846,23 @@ impl FactorishState {
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
         let mut structures = std::mem::take(&mut self.structures);
-        for structure in &mut structures {
-            structure.frame_proc(self);
+        for i in 0..structures.len() {
+            if 0 < i {
+                let (front, mid) = structures.split_at_mut(i);
+                let (center, last) = mid
+                    .split_first_mut()
+                    .ok_or(JsValue::from_str("Structures split fail"))?;
+                center.frame_proc(self, &mut front.into_iter().chain(last.into_iter()));
+            } else {
+                let (center, last) = structures
+                    .split_first_mut()
+                    .ok_or(JsValue::from_str("Structures split fail"))?;
+                center.frame_proc(self, &mut last.iter_mut());
+            }
         }
+        // for structure in &mut structures {
+        //     structure.frame_proc(self, &mut structures);
+        // }
         // let mut drop_items = std::mem::take(&mut self.drop_items);
         let mut to_remove = vec![];
         for i in 0..self.drop_items.len() {
@@ -1042,7 +1137,7 @@ impl FactorishState {
         }
         let cursor = [(pos[0] / 32.) as i32, (pos[1] / 32.) as i32];
         self.cursor = Some(cursor);
-        console_log!("cursor: {}, {}", cursor[0], cursor[1]);
+        // console_log!("cursor: {}, {}", cursor[0], cursor[1]);
         self.update_info();
         Ok(())
     }
