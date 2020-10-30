@@ -144,6 +144,7 @@ enum ItemResponse {
 }
 
 trait Structure {
+    fn id(&self) -> u32;
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
     fn draw(
@@ -207,13 +208,16 @@ const tool_defs: [ToolDef; 4] = [
 ];
 
 struct TransportBelt {
+    id: u32,
     position: Position,
     rotation: Rotation,
 }
 
 impl TransportBelt {
-    fn new(x: i32, y: i32, rotation: Rotation) -> Self {
+    fn new(serial_no: &mut u32, x: i32, y: i32, rotation: Rotation) -> Self {
+        *serial_no += 1;
         TransportBelt {
+            id: *serial_no,
             position: Position { x, y },
             rotation,
         }
@@ -221,6 +225,9 @@ impl TransportBelt {
 }
 
 impl Structure for TransportBelt {
+    fn id(&self) -> u32 {
+        self.id
+    }
     fn name(&self) -> &str {
         "TransportBelt"
     }
@@ -304,14 +311,17 @@ fn draw_direction_arrow(
 }
 
 struct Inserter {
+    id: u32,
     position: Position,
     rotation: Rotation,
     cooldown: f64,
 }
 
 impl Inserter {
-    fn new(x: i32, y: i32, rotation: Rotation) -> Self {
+    fn new(serial_no: &mut u32, x: i32, y: i32, rotation: Rotation) -> Self {
+        *serial_no += 1;
         Inserter {
+            id: *serial_no,
             position: Position { x, y },
             rotation,
             cooldown: 0.,
@@ -320,6 +330,9 @@ impl Inserter {
 }
 
 impl Structure for Inserter {
+    fn id(&self) -> u32 {
+        self.id
+    }
     fn name(&self) -> &str {
         "Inserter"
     }
@@ -421,13 +434,16 @@ impl Structure for Inserter {
 const CHEST_CAPACITY: usize = 100;
 
 struct Chest {
+    id: u32,
     position: Position,
     inventory: HashMap<String, i32>,
 }
 
 impl Chest {
-    fn new(position: &Position) -> Self {
+    fn new(serial_no: &mut u32, position: &Position) -> Self {
+        *serial_no += 1;
         Chest {
+            id: *serial_no,
             position: *position,
             inventory: HashMap::new(),
         }
@@ -450,6 +466,9 @@ fn str_to_item(name: &str) -> Option<ItemType> {
 }
 
 impl Structure for Chest {
+    fn id(&self) -> u32 {
+        self.id
+    }
     fn name(&self) -> &'static str {
         "Chest"
     }
@@ -534,6 +553,7 @@ struct Recipe {
 }
 
 struct OreMine {
+    id: u32,
     position: Position,
     rotation: Rotation,
     cooldown: f64,
@@ -543,8 +563,10 @@ struct OreMine {
 }
 
 impl OreMine {
-    fn new(x: i32, y: i32, rotation: Rotation) -> Self {
+    fn new(serial_no: &mut u32, x: i32, y: i32, rotation: Rotation) -> Self {
+        *serial_no += 1;
         OreMine {
+            id: *serial_no,
             position: Position { x, y },
             rotation,
             cooldown: 0.,
@@ -556,6 +578,10 @@ impl OreMine {
 }
 
 impl Structure for OreMine {
+    fn id(&self) -> u32 {
+        self.id
+    }
+
     fn name(&self) -> &str {
         "OreMine"
     }
@@ -732,6 +758,7 @@ pub struct FactorishState {
     structures: Vec<Box<dyn Structure>>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
+    struct_serial: u32,
     selected_tool: Option<usize>,
     tool_rotation: Rotation,
     inventory: HashMap<String, usize>,
@@ -773,6 +800,7 @@ impl FactorishState {
 
         let width = 64;
         let height = 64;
+        let mut struct_serial = 0;
 
         Ok(FactorishState {
             delta_time: 0.1,
@@ -827,13 +855,29 @@ impl FactorishState {
                 ret
             },
             structures: vec![
-                Box::new(TransportBelt::new(10, 6, Rotation::Left)),
-                Box::new(TransportBelt::new(11, 6, Rotation::Left)),
-                Box::new(TransportBelt::new(12, 6, Rotation::Left)),
-                Box::new(OreMine::new(12, 7, Rotation::Top)),
+                Box::new(TransportBelt::new(
+                    &mut struct_serial,
+                    10,
+                    6,
+                    Rotation::Left,
+                )),
+                Box::new(TransportBelt::new(
+                    &mut struct_serial,
+                    11,
+                    6,
+                    Rotation::Left,
+                )),
+                Box::new(TransportBelt::new(
+                    &mut struct_serial,
+                    12,
+                    6,
+                    Rotation::Left,
+                )),
+                Box::new(OreMine::new(&mut struct_serial, 12, 7, Rotation::Top)),
             ],
             drop_items: vec![],
             serial_no: 0,
+            struct_serial,
         })
     }
 
@@ -881,8 +925,13 @@ impl FactorishState {
                         if self.hit_check(moved_x, moved_y, Some(item.id)) {
                             continue;
                         }
-                        if let Some(s) = structures.iter().find(|s| s.position() == &Position{x: moved_x / 32, y: moved_y / 32})
-                        {
+                        if let Some(s) = structures.iter().find(|s| {
+                            s.position()
+                                == &Position {
+                                    x: moved_x / 32,
+                                    y: moved_y / 32,
+                                }
+                        }) {
                             if !s.movable() {
                                 continue;
                             }
@@ -1095,17 +1144,45 @@ impl FactorishState {
         }
     }
 
-    fn new_structure(
+    fn new_structure_with_serial(
         &self,
+        struct_serial: &mut u32,
         tool_index: usize,
         cursor: &Position,
     ) -> Result<Box<dyn Structure>, JsValue> {
         Ok(match tool_index {
-            0 => Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation)),
-            1 => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
-            2 => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
-            _ => Box::new(Chest::new(cursor)),
+            0 => Box::new(TransportBelt::new(
+                struct_serial,
+                cursor.x,
+                cursor.y,
+                self.tool_rotation,
+            )),
+            1 => Box::new(Inserter::new(
+                struct_serial,
+                cursor.x,
+                cursor.y,
+                self.tool_rotation,
+            )),
+            2 => Box::new(OreMine::new(
+                struct_serial,
+                cursor.x,
+                cursor.y,
+                self.tool_rotation,
+            )),
+            _ => Box::new(Chest::new(struct_serial, cursor)),
         })
+    }
+
+    fn new_structure(
+        &mut self,
+        tool_index: usize,
+        cursor: &Position,
+    ) -> Result<Box<dyn Structure>, JsValue> {
+        let mut struct_serial = self.struct_serial;
+        let ret = self.new_structure_with_serial(&mut struct_serial, tool_index, cursor);
+        self.struct_serial = struct_serial;
+        console_log!("new structure: {}", struct_serial);
+        ret
     }
 
     pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<(), JsValue> {
@@ -1121,8 +1198,8 @@ impl FactorishState {
                 if let Some(count) = self.inventory.get(tool_defs[selected_tool].item_name) {
                     if 1 <= *count {
                         self.harvest(&cursor);
-                        self.structures
-                            .push(self.new_structure(selected_tool, &cursor)?);
+                        let new_struct = self.new_structure(selected_tool, &cursor)?;
+                        self.structures.push(new_struct);
                         if let Some(count) =
                             self.inventory.get_mut(tool_defs[selected_tool].item_name)
                         {
@@ -1227,7 +1304,9 @@ impl FactorishState {
         tool_index: usize,
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
-        let mut tool = self.new_structure(tool_index, &Position { x: 0, y: 0 })?;
+        let mut serial = 0;
+        let mut tool =
+            self.new_structure_with_serial(&mut serial, tool_index, &Position { x: 0, y: 0 })?;
         tool.set_rotation(&self.tool_rotation).ok();
         tool.draw(self, context)?;
         Ok(())
@@ -1330,7 +1409,12 @@ impl FactorishState {
             if let Some(selected_tool) = self.selected_tool {
                 context.save();
                 context.set_global_alpha(0.5);
-                let mut tool = self.new_structure(selected_tool, &Position::from(cursor))?;
+                let mut serial = 0;
+                let mut tool = self.new_structure_with_serial(
+                    &mut serial,
+                    selected_tool,
+                    &Position::from(cursor),
+                )?;
                 tool.set_rotation(&self.tool_rotation).ok();
                 tool.draw(self, &context)?;
                 context.restore();
