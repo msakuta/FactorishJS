@@ -67,7 +67,7 @@ struct Cell {
     coal_ore: u32,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Copy, Clone)]
 struct Position {
     x: i32,
     y: i32,
@@ -175,7 +175,7 @@ struct ToolDef {
     item_name: &'static str,
     image: &'static str,
 }
-const tool_defs: [ToolDef; 3] = [
+const tool_defs: [ToolDef; 4] = [
     ToolDef {
         item_name: "TransportBelt",
         image: "img/transport.png",
@@ -187,6 +187,10 @@ const tool_defs: [ToolDef; 3] = [
     ToolDef {
         item_name: "OreMine",
         image: "img/mine.png",
+    },
+    ToolDef {
+        item_name: "Chest",
+        image: "img/chest.png",
     },
 ];
 
@@ -373,6 +377,76 @@ impl Structure for Inserter {
     fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
         self.rotation = *rotation;
         Ok(())
+    }
+}
+
+const CHEST_CAPACITY: usize = 100;
+
+struct Chest{
+    position: Position,
+    inventory: HashMap<String, i32>,
+}
+
+impl Chest{
+    fn new(position: &Position) -> Self{
+        Chest{position: *position, inventory: HashMap::new()}
+    }
+}
+
+fn item_to_str(type_: &ItemType) -> String {
+    match type_ {
+        ItemType::IronOre => "IronOre".to_string(),
+        ItemType::CoalOre => "CoalOre".to_string(),
+    }
+}
+
+fn str_to_item(name: &str) -> Option<ItemType> {
+    match name {
+        "IronOre" => Some(ItemType::IronOre),
+        "CoalOre" => Some(ItemType::CoalOre),
+        _ => None
+    }
+}
+
+impl Structure for Chest{
+    fn name(&self) -> &'static str{
+        "Chest"
+    }
+
+    fn position(&self) -> &Position {
+        &self.position
+    }
+
+    fn draw(&self, state: &FactorishState, context: &CanvasRenderingContext2d) -> Result<(), JsValue> {
+        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        match state.image_chest.as_ref() {
+            Some(img) => {
+                context.draw_image_with_html_image_element(img, x, y)?;
+                Ok(())
+            }
+            None => Err(JsValue::from_str("chest image not available")),
+        }
+    }
+
+    fn desc(&self, state: &FactorishState) -> String {
+        format!("Items: \n{}",
+            self.inventory.iter().map(|item| 
+                format!("{}: {}<br>", item.0, item.1))
+                .fold(String::from(""), |accum, item| accum + &item))
+    }
+
+    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponse, ()> {
+        if self.inventory.len() < CHEST_CAPACITY {
+            if let Some(item_ref) = self.inventory.get_mut(&item_to_str(&_item.type_)) {
+                *item_ref += 1;
+            }
+            else {
+                self.inventory.insert(item_to_str(&_item.type_), 1);
+            }
+            Ok(ItemResponse::Consume)
+        } else{
+            Err(())
+        }
     }
 }
 
@@ -589,6 +663,7 @@ pub struct FactorishState {
     image_ore: Option<HtmlImageElement>,
     image_coal: Option<HtmlImageElement>,
     image_belt: Option<HtmlImageElement>,
+    image_chest: Option<HtmlImageElement>,
     image_mine: Option<HtmlImageElement>,
     image_inserter: Option<HtmlImageElement>,
     image_direction: Option<HtmlImageElement>,
@@ -632,6 +707,7 @@ impl FactorishState {
                 ("TransportBelt", 10usize),
                 ("Inserter", 5usize),
                 ("OreMine", 5usize),
+                ("Chest", 3usize),
             ]
             .iter()
             .map(|(s, num)| (String::from(*s), *num))
@@ -641,6 +717,7 @@ impl FactorishState {
             image_ore: None,
             image_coal: None,
             image_belt: None,
+            image_chest: None,
             image_mine: None,
             image_inserter: None,
             image_direction: None,
@@ -923,7 +1000,8 @@ impl FactorishState {
         Ok(match tool_index {
             0 => Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation)),
             1 => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
-            _ => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
+            2 => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
+            _ => Box::new(Chest::new(cursor)),
         })
     }
 
@@ -1006,6 +1084,7 @@ impl FactorishState {
         self.image_ore = Some(load_image("img/iron.png")?);
         self.image_coal = Some(load_image("img/coal.png")?);
         self.image_belt = Some(load_image("img/transport.png")?);
+        self.image_chest = Some(load_image("img/chest.png")?);
         self.image_mine = Some(load_image("img/mine.png")?);
         self.image_inserter = Some(load_image("img/inserter-base.png")?);
         self.image_direction = Some(load_image("img/direction.png")?);
@@ -1046,8 +1125,7 @@ impl FactorishState {
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
         let mut tool = self.new_structure(tool_index, &Position { x: 0, y: 0 })?;
-        tool.set_rotation(&self.tool_rotation)
-            .or_else(|_| Err(JsValue::from_str("rotation failed")))?;
+        tool.set_rotation(&self.tool_rotation).ok();
         tool.draw(self, context)?;
         Ok(())
     }
@@ -1075,7 +1153,6 @@ impl FactorishState {
             .collect()
     }
 
-    #[wasm_bindgen]
     pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
         use std::f64;
 
@@ -1151,8 +1228,7 @@ impl FactorishState {
                 context.save();
                 context.set_global_alpha(0.5);
                 let mut tool = self.new_structure(selected_tool, &Position::from(cursor))?;
-                tool.set_rotation(&self.tool_rotation)
-                    .map_err(|_| JsValue::from_str("Couldn't rotate struct"))?;
+                tool.set_rotation(&self.tool_rotation).ok();
                 tool.draw(self, &context)?;
                 context.restore();
             }
