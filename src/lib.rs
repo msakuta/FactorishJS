@@ -881,6 +881,14 @@ impl FactorishState {
                         if self.hit_check(moved_x, moved_y, Some(item.id)) {
                             continue;
                         }
+                        if let Some(s) = structures.iter().find(|s| s.position() == &Position{x: moved_x / 32, y: moved_y / 32})
+                        {
+                            if !s.movable() {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
                         let item = &mut self.drop_items[i];
                         item.x = moved_x;
                         item.y = moved_y;
