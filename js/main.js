@@ -2,13 +2,14 @@ import init, { FactorishState } from "../pkg/factorish_js.js";
 
 window.onload = async function(){
     await init();
-    let sim = new FactorishState();
+    let sim = new FactorishState(updateInventory);
 
     const canvas = document.getElementById('canvas');
     const canvasSize = canvas.getBoundingClientRect();
     const ctx = canvas.getContext('2d');
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
+    const inventoryElem = document.getElementById('inventory2');
 
     const infoElem = document.createElement('div');
     infoElem.style.position = 'absolute';
@@ -16,7 +17,11 @@ window.onload = async function(){
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
 
+    const selectedInventory = null;
+    const selectedInventoryItem = null;
+
     const tilesize = 32;
+    const objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
     const tableMargin = 10.;
     const miniMapSize = 200;
     const miniMapElem = document.createElement('div');
@@ -160,6 +165,172 @@ window.onload = async function(){
             toolOverlays[i].innerHTML = inventory[i];
     }
 
+    function getImageFile(type){
+        switch(type){
+        case 'time':
+            return 'img/time.png';
+        case 'Iron Ore':
+            return 'img/ore.png';
+        case 'Iron Plate':
+            return 'img/metal.png';
+        case 'Steel Plate':
+            return 'img/steel-plate.png';
+        case 'Copper Ore':
+            return 'img/copper-ore.png';
+        case 'Copper Plate':
+            return 'img/copper-plate.png';
+        case 'Coal Ore':
+            return 'img/coal-ore.png';
+        case 'Gear':
+            return 'img/gear.png';
+        case 'Copper Wire':
+            return 'img/copper-wire.png';
+        case 'Circuit':
+            return 'img/circuit.png';
+        case 'Transport Belt':
+            return 'img/transport.png';
+        case 'Splitter':
+            return 'img/splitter.png';
+        case 'Inserter':
+            return 'img/inserter-base.png';
+        case 'Chest':
+            return 'img/chest.png';
+        case 'Ore Mine':
+            return "img/mine.png";
+        case 'Furnace':
+            return ["img/furnace.png", 3];
+        case 'Assembler':
+            return "img/assembler.png";
+        case 'Water Well':
+            return "img/waterwell.png";
+        case 'Boiler':
+            return ["img/boiler.png", 3];
+        case 'Pipe':
+            return "img/pipe-item.png";
+        case 'SteamEngine':
+            return "img/steam-engine.png";
+        default:
+            return "";
+        }
+    }
+
+    function updateInventory(inventory){
+        console.log("updateInventory")
+        updateInventoryInt(playerInventoryElem, sim, false, inventory);
+    }
+
+    function generateItemImage(i, iconSize, count){
+        var img = document.createElement('div');
+        var imageFile = getImageFile(i);
+        img.style.backgroundImage = 'url(' + (imageFile instanceof Array ?
+            imageFile[0] : imageFile) + ')';
+        var size = iconSize ? 32 : objViewSize;
+        img.style.width = size + 'px';
+        img.style.height = size + 'px';
+        img.style.display = 'inline-block';
+        if(imageFile instanceof Array)
+            img.style.backgroundSize = size * imageFile[1] + 'px ' + size + 'px';
+        else
+            img.style.backgroundSize = size + 'px ' + size + 'px';
+        img.setAttribute('draggable', 'false');
+        if(iconSize && count){
+            var container = document.createElement('span');
+            container.style.position = 'relative';
+            container.style.display = 'inline-block';
+            container.style.width = size + 'px';
+            container.style.height = size + 'px';
+            container.appendChild(img);
+            var overlay = document.createElement('div');
+            overlay.setAttribute('class', 'overlay noselect');
+            overlay.innerHTML = count;
+            container.appendChild(overlay);
+            return container;
+        }
+        return img;
+    }
+
+    function updateInventoryInt(elem, owner, icons, inventory){
+        // Local function to update DOM elements based on selection
+        function updateInventorySelection(elem, owner){
+            for(var i = 0; i < elem.children.length; i++){
+                var celem = elem.children[i];
+                celem.style.backgroundColor = owner === selectedInventory &&
+                    celem.itemName === selectedInventoryItem ? "#00ffff" : "";
+            }
+        }
+    
+        // Clear the elements first
+        while(elem.firstChild)
+            elem.removeChild(elem.firstChild);
+
+        for(var i in inventory){
+            var [name, v] = inventory[i];
+            var div;
+            if(icons){
+                div = generateItemImage(name, true, v);
+            }
+            else{
+                div = document.createElement('div');
+                div.appendChild(generateItemImage(name));
+                var text = document.createElement('span');
+                text.innerHTML = v + ' ' + name;
+                div.appendChild(text);
+                div.style.textAlign = 'left';
+            }
+            if(selectedInventory === owner && selectedInventoryItem === name)
+                div.style.backgroundColor = '#00ffff';
+            div.setAttribute('class', 'noselect');
+            div.itemName = name;
+            div.itemAmount = v;
+            div.onclick = function(){
+                if(selectedInventory !== owner || selectedInventoryItem !== this.itemName){
+                    selectedInventory = owner;
+                    selectedInventoryItem = this.itemName;
+                }
+                else{
+                    selectedInventory = null;
+                    selectedInventoryItem = null;
+                }
+                updateInventorySelection(playerInventoryElem, player);
+                if(inventoryTarget && inventoryTarget.inventory)
+                    updateInventorySelection(document.getElementById('inventoryContent'), inventoryTarget);
+            };
+            div.setAttribute('draggable', 'true');
+            div.ondragstart = function(ev){
+                console.log("dragStart");
+                ev.dataTransfer.dropEffect = 'move';
+                // Encode information to determine item to drop into a JSON
+                ev.dataTransfer.setData(textType, JSON.stringify(
+                    {type: ev.target.itemName, fromPlayer: owner === player}));
+            };
+            elem.appendChild(div);
+        }
+    }
+
+    inventoryElem.style.display = 'none';
+
+    const playerElem = document.createElement('div');
+    playerElem.style.overflow = 'visible';
+    playerElem.style.borderStyle = 'solid';
+    playerElem.style.borderWidth = '1px';
+    playerElem.style.border = '1px solid #00f';
+    playerElem.style.backgroundColor = '#ffff7f';
+    playerElem.style.position = 'relative';
+    playerElem.style.margin = '3px';
+    playerElem.style.left = '50%';
+    playerElem.style.width = (320) + 'px';
+    playerElem.style.height = (160) + 'px';
+    container.appendChild(playerElem);
+    playerElem.style.marginLeft = (-(playerElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
+
+    const playerInventoryElem = document.createElement('div');
+    playerInventoryElem.style.position = 'relative';
+    playerInventoryElem.style.overflowY = 'scroll';
+    playerInventoryElem.style.width = '100%';
+    playerInventoryElem.style.height = '100%';
+    playerInventoryElem.style.textAlign = 'left';
+    playerElem.appendChild(playerInventoryElem);
+
     canvas.addEventListener("mousedown", function(evt){
         sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
         updateToolBar();
@@ -185,6 +356,8 @@ window.onload = async function(){
     window.addEventListener( 'keydown', onKeyDown, false );
 
     updateToolBar();
+
+    updateInventory(sim.get_player_inventory());
 
     window.setInterval(function(){
         sim.simulate(0.05);

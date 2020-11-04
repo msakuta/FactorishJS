@@ -189,7 +189,7 @@ struct ToolDef {
 }
 const tool_defs: [ToolDef; 4] = [
     ToolDef {
-        item_name: "TransportBelt",
+        item_name: "Transport Belt",
         image: "img/transport.png",
     },
     ToolDef {
@@ -197,7 +197,7 @@ const tool_defs: [ToolDef; 4] = [
         image: "img/inserter-base.png",
     },
     ToolDef {
-        item_name: "OreMine",
+        item_name: "Ore Mine",
         image: "img/mine.png",
     },
     ToolDef {
@@ -222,7 +222,7 @@ impl TransportBelt {
 
 impl Structure for TransportBelt {
     fn name(&self) -> &str {
-        "TransportBelt"
+        "Transport Belt"
     }
 
     fn position(&self) -> &Position {
@@ -557,7 +557,7 @@ impl OreMine {
 
 impl Structure for OreMine {
     fn name(&self) -> &str {
-        "OreMine"
+        "Ore Mine"
     }
 
     fn position(&self) -> &Position {
@@ -720,6 +720,11 @@ impl DropItem {
         ret
     }
 }
+
+struct Player {
+    inventory: HashMap<String, usize>,
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     delta_time: f64,
@@ -734,11 +739,12 @@ pub struct FactorishState {
     serial_no: u32,
     selected_tool: Option<usize>,
     tool_rotation: Rotation,
-    inventory: HashMap<String, usize>,
+    player: Player,
 
     // rendering states
     cursor: Option<[i32; 2]>,
     info_elem: Option<HtmlDivElement>,
+    on_player_update: js_sys::Function,
 
     image_dirt: Option<HtmlImageElement>,
     image_ore: Option<HtmlImageElement>,
@@ -768,7 +774,7 @@ enum RotateErr {
 #[wasm_bindgen]
 impl FactorishState {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Result<FactorishState, JsValue> {
+    pub fn new(on_player_update: js_sys::Function) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
         let width = 64;
@@ -784,15 +790,17 @@ impl FactorishState {
             cursor: None,
             selected_tool: None,
             tool_rotation: Rotation::Left,
-            inventory: [
-                ("TransportBelt", 10usize),
-                ("Inserter", 5usize),
-                ("OreMine", 5usize),
-                ("Chest", 3usize),
-            ]
-            .iter()
-            .map(|(s, num)| (String::from(*s), *num))
-            .collect(),
+            player: Player {
+                inventory: [
+                    ("Transport Belt", 10usize),
+                    ("Inserter", 5usize),
+                    ("Ore Mine", 5usize),
+                    ("Chest", 3usize),
+                ]
+                .iter()
+                .map(|(s, num)| (String::from(*s), *num))
+                .collect(),
+            },
             info_elem: None,
             image_dirt: None,
             image_ore: None,
@@ -834,6 +842,7 @@ impl FactorishState {
             ],
             drop_items: vec![],
             serial_no: 0,
+            on_player_update,
         })
     }
 
@@ -881,8 +890,13 @@ impl FactorishState {
                         if self.hit_check(moved_x, moved_y, Some(item.id)) {
                             continue;
                         }
-                        if let Some(s) = structures.iter().find(|s| s.position() == &Position{x: moved_x / 32, y: moved_y / 32})
-                        {
+                        if let Some(s) = structures.iter().find(|s| {
+                            s.position()
+                                == &Position {
+                                    x: moved_x / 32,
+                                    y: moved_y / 32,
+                                }
+                        }) {
                             if !s.movable() {
                                 continue;
                             }
@@ -980,7 +994,8 @@ impl FactorishState {
             .enumerate()
             .find(|item| item.1.id == id)
         {
-            Some(self.drop_items.remove(i))
+            let ret = Some(self.drop_items.remove(i));
+            ret
         } else {
             None
         }
@@ -1076,23 +1091,42 @@ impl FactorishState {
         Err(NewObjectErr::OutOfMap)
     }
 
-    fn harvest(&mut self, position: &Position) -> bool {
+    fn harvest(&mut self, position: &Position) -> Result<bool, JsValue> {
         if let Some((index, structure)) = self
             .structures
             .iter()
             .enumerate()
             .find(|(_, structure)| structure.position() == position)
         {
-            if let Some(count) = self.inventory.get_mut(structure.name()) {
+            if let Some(count) = self.player.inventory.get_mut(structure.name()) {
                 *count += 1;
             } else {
-                self.inventory.insert(structure.name().to_string(), 1);
+                self.player
+                    .inventory
+                    .insert(structure.name().to_string(), 1);
             }
             self.structures.remove(index);
-            true
+            self.on_player_update
+                .call1(&window(), &JsValue::from(self.get_player_inventory()?))
+                .unwrap_or(JsValue::from(true));
+            Ok(true)
         } else {
-            false
+            Ok(false)
         }
+    }
+
+    pub fn get_player_inventory(&self) -> Result<js_sys::Array, JsValue> {
+        Ok(self
+            .player
+            .inventory
+            .iter()
+            .map(|pair| {
+                js_sys::Array::of2(
+                    &JsValue::from_str(pair.0),
+                    &JsValue::from_f64(*pair.1 as f64),
+                )
+            })
+            .collect::<js_sys::Array>())
     }
 
     fn new_structure(
@@ -1118,21 +1152,30 @@ impl FactorishState {
         };
         if button == 0 {
             if let Some(selected_tool) = self.selected_tool {
-                if let Some(count) = self.inventory.get(tool_defs[selected_tool].item_name) {
+                if let Some(count) = self
+                    .player
+                    .inventory
+                    .get(tool_defs[selected_tool].item_name)
+                {
                     if 1 <= *count {
-                        self.harvest(&cursor);
+                        self.harvest(&cursor)?;
                         self.structures
                             .push(self.new_structure(selected_tool, &cursor)?);
-                        if let Some(count) =
-                            self.inventory.get_mut(tool_defs[selected_tool].item_name)
+                        if let Some(count) = self
+                            .player
+                            .inventory
+                            .get_mut(tool_defs[selected_tool].item_name)
                         {
                             *count -= 1;
                         }
+                        self.on_player_update
+                            .call1(&window(), &JsValue::from(self.get_player_inventory()?))
+                            .unwrap_or(JsValue::from(true));
                     }
                 }
             }
         } else {
-            self.harvest(&cursor);
+            self.harvest(&cursor)?;
         }
         console_log!("clicked: {}, {}", cursor.x, cursor.y);
         self.update_info();
@@ -1210,6 +1253,7 @@ impl FactorishState {
                 JsValue::from(selected_tool as f64),
                 JsValue::from(
                     *self
+                        .player
                         .inventory
                         .get(tool_defs[selected_tool].item_name)
                         .unwrap_or(&0) as f64,
@@ -1252,7 +1296,9 @@ impl FactorishState {
     pub fn tool_inventory(&self) -> js_sys::Array {
         tool_defs
             .iter()
-            .map(|tool| JsValue::from(*self.inventory.get(tool.item_name).unwrap_or(&0) as f64))
+            .map(|tool| {
+                JsValue::from(*self.player.inventory.get(tool.item_name).unwrap_or(&0) as f64)
+            })
             .collect()
     }
 
