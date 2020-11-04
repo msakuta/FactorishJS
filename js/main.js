@@ -215,7 +215,6 @@ window.onload = async function(){
     }
 
     function updateInventory(inventory){
-        console.log("updateInventory")
         updateInventoryInt(playerInventoryElem, sim, false, inventory);
     }
 

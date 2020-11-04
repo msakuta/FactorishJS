@@ -180,6 +180,9 @@ trait Structure {
     ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
         Err(())
     }
+    fn inventory(&self) -> Option<&HashMap<String, usize>> {
+        None
+    }
 }
 
 const tilesize: i32 = 32;
@@ -422,7 +425,7 @@ const CHEST_CAPACITY: usize = 100;
 
 struct Chest {
     position: Position,
-    inventory: HashMap<String, i32>,
+    inventory: HashMap<String, usize>,
 }
 
 impl Chest {
@@ -436,15 +439,15 @@ impl Chest {
 
 fn item_to_str(type_: &ItemType) -> String {
     match type_ {
-        ItemType::IronOre => "IronOre".to_string(),
-        ItemType::CoalOre => "CoalOre".to_string(),
+        ItemType::IronOre => "Iron Ore".to_string(),
+        ItemType::CoalOre => "Coal Ore".to_string(),
     }
 }
 
 fn str_to_item(name: &str) -> Option<ItemType> {
     match name {
-        "IronOre" => Some(ItemType::IronOre),
-        "CoalOre" => Some(ItemType::CoalOre),
+        "Iron Ore" => Some(ItemType::IronOre),
+        "Coal Ore" => Some(ItemType::CoalOre),
         _ => None,
     }
 }
@@ -524,6 +527,10 @@ impl Structure for Chest {
         } else {
             Err(())
         }
+    }
+
+    fn inventory(&self) -> Option<&HashMap<String, usize>> {
+        Some(&self.inventory)
     }
 }
 
@@ -725,6 +732,16 @@ struct Player {
     inventory: HashMap<String, usize>,
 }
 
+impl Player {
+    fn add_item(&mut self, name: &str, count: usize) {
+        if let Some(entry) = self.inventory.get_mut(name) {
+            *entry += count;
+        } else {
+            self.inventory.insert(name.to_string(), count);
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     delta_time: f64,
@@ -835,10 +852,10 @@ impl FactorishState {
                 ret
             },
             structures: vec![
-                Box::new(TransportBelt::new(10, 6, Rotation::Left)),
-                Box::new(TransportBelt::new(11, 6, Rotation::Left)),
-                Box::new(TransportBelt::new(12, 6, Rotation::Left)),
-                Box::new(OreMine::new(12, 7, Rotation::Top)),
+                Box::new(TransportBelt::new(10, 3, Rotation::Left)),
+                Box::new(TransportBelt::new(11, 3, Rotation::Left)),
+                Box::new(TransportBelt::new(12, 3, Rotation::Left)),
+                Box::new(OreMine::new(12, 2, Rotation::Bottom)),
             ],
             drop_items: vec![],
             serial_no: 0,
@@ -1104,6 +1121,11 @@ impl FactorishState {
                 self.player
                     .inventory
                     .insert(structure.name().to_string(), 1);
+            }
+            if let Some(inventory) = structure.inventory() {
+                for (name, &count) in inventory {
+                    self.player.add_item(name, count)
+                }
             }
             self.structures.remove(index);
             self.on_player_update
