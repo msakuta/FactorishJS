@@ -17,8 +17,8 @@ window.onload = async function(){
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
 
-    const selectedInventory = null;
-    const selectedInventoryItem = null;
+    var selectedInventory = null;
+    var selectedInventoryItem = null;
 
     const tilesize = 32;
     const objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
@@ -248,12 +248,12 @@ window.onload = async function(){
         return img;
     }
 
-    function updateInventoryInt(elem, owner, icons, inventory){
+    function updateInventoryInt(elem, owner, icons, [inventory, selectedInventoryItem]){
         // Local function to update DOM elements based on selection
-        function updateInventorySelection(elem, owner){
+        function updateInventorySelection(elem){
             for(var i = 0; i < elem.children.length; i++){
                 var celem = elem.children[i];
-                celem.style.backgroundColor = owner === selectedInventory &&
+                celem.style.backgroundColor =
                     celem.itemName === selectedInventoryItem ? "#00ffff" : "";
             }
         }
@@ -290,9 +290,10 @@ window.onload = async function(){
                     selectedInventory = null;
                     selectedInventoryItem = null;
                 }
-                updateInventorySelection(playerInventoryElem, player);
-                if(inventoryTarget && inventoryTarget.inventory)
-                    updateInventorySelection(document.getElementById('inventoryContent'), inventoryTarget);
+                sim.select_player_inventory(selectedInventoryItem);
+                updateInventorySelection(playerInventoryElem);
+                // if(inventoryTarget && inventoryTarget.inventory)
+                //     updateInventorySelection(document.getElementById('inventoryContent'), inventoryTarget);
             };
             div.setAttribute('draggable', 'true');
             div.ondragstart = function(ev){

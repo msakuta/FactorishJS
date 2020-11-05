@@ -395,7 +395,7 @@ impl Structure for Inserter {
             } else if let Some((_, structure)) = structures.enumerate().find(|(_, s)| {
                 s.position().x == input_position.x && s.position().y == input_position.y
             }) {
-                console_log!("outputting: {:?}", structure.position());
+                console_log!("outputting from a structure at {:?}", structure.position());
                 if let Ok((item, callback)) = structure.output(state, &output_position) {
                     if try_output(state, item.type_) {
                         callback(&item);
@@ -730,6 +730,7 @@ impl DropItem {
 
 struct Player {
     inventory: HashMap<String, usize>,
+    selected_item: Option<String>,
 }
 
 impl Player {
@@ -738,6 +739,16 @@ impl Player {
             *entry += count;
         } else {
             self.inventory.insert(name.to_string(), count);
+        }
+    }
+
+    fn select_item(&mut self, name: &str) -> Result<(), JsValue> {
+        if self.inventory.get(name).is_some() {
+            self.selected_item = Some(name.to_string());
+            Ok(())
+        } else {
+            self.selected_item = None;
+            Err(JsValue::from_str("item not found"))
         }
     }
 }
@@ -817,6 +828,7 @@ impl FactorishState {
                 .iter()
                 .map(|(s, num)| (String::from(*s), *num))
                 .collect(),
+                selected_item: None,
             },
             info_elem: None,
             image_dirt: None,
@@ -1137,18 +1149,34 @@ impl FactorishState {
         }
     }
 
+    /// Returns [[itemName, itemCount]*, selectedItemName]
     pub fn get_player_inventory(&self) -> Result<js_sys::Array, JsValue> {
-        Ok(self
-            .player
-            .inventory
-            .iter()
-            .map(|pair| {
-                js_sys::Array::of2(
-                    &JsValue::from_str(pair.0),
-                    &JsValue::from_f64(*pair.1 as f64),
-                )
-            })
-            .collect::<js_sys::Array>())
+        Ok(js_sys::Array::of2(
+            &JsValue::from(
+                self.player
+                    .inventory
+                    .iter()
+                    .map(|pair| {
+                        js_sys::Array::of2(
+                            &JsValue::from_str(pair.0),
+                            &JsValue::from_f64(*pair.1 as f64),
+                        )
+                    })
+                    .collect::<js_sys::Array>(),
+            ),
+            &JsValue::from_str(
+                &self
+                    .player
+                    .selected_item
+                    .as_ref()
+                    .map(|s| s as &str)
+                    .unwrap_or(&""),
+            ),
+        ))
+    }
+
+    pub fn select_player_inventory(&mut self, name: &str) -> Result<(), JsValue> {
+        self.player.select_item(name)
     }
 
     fn new_structure(
