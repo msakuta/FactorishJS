@@ -138,10 +138,17 @@ impl Rotation {
     }
 }
 
+enum FrameProcResult {
+    None,
+    InventoryChanged(Position),
+}
+
 enum ItemResponse {
     Move(i32, i32),
     Consume,
 }
+
+type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
 trait Structure {
     fn name(&self) -> &str;
@@ -158,7 +165,8 @@ trait Structure {
         &mut self,
         _state: &mut FactorishState,
         _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
-    ) {
+    ) -> Result<FrameProcResult, ()> {
+        Ok(FrameProcResult::None)
     }
     fn movable(&self) -> bool {
         false
@@ -170,7 +178,7 @@ trait Structure {
         Err(())
     }
     /// Called every frame for each item that is on this structure.
-    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponse, ()> {
+    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
         Err(())
     }
     fn output<'a>(
@@ -279,10 +287,10 @@ impl Structure for TransportBelt {
         Ok(())
     }
 
-    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponse, ()> {
+    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
         let moved_x = item.x + self.rotation.delta().0;
         let moved_y = item.y + self.rotation.delta().1;
-        Ok(ItemResponse::Move(moved_x, moved_y))
+        Ok((ItemResponse::Move(moved_x, moved_y), None))
     }
 }
 
@@ -353,7 +361,7 @@ impl Structure for Inserter {
         &mut self,
         state: &mut FactorishState,
         structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
-    ) {
+    ) -> Result<FrameProcResult, ()> {
         if self.cooldown <= 1. {
             self.cooldown = 0.;
             let input_position = self.position.add(self.rotation.delta_inv());
@@ -395,19 +403,28 @@ impl Structure for Inserter {
             } else if let Some((_, structure)) = structures.enumerate().find(|(_, s)| {
                 s.position().x == input_position.x && s.position().y == input_position.y
             }) {
-                console_log!("outputting from a structure at {:?}", structure.position());
+                // console_log!("outputting from a structure at {:?}", structure.position());
                 if let Ok((item, callback)) = structure.output(state, &output_position) {
                     if try_output(state, item.type_) {
                         callback(&item);
-                        console_log!("output succeeded: {:?}", item.type_);
+                        if let Some(pos) = state.selected_structure_inventory {
+                            if pos == input_position {
+                                return Ok(FrameProcResult::InventoryChanged(input_position));
+                                // if let Err(e) = state.on_show_inventory.call2(&window(), &JsValue::from(output_position.x), &JsValue::from(output_position.y)) {
+                                //     console_log!("on_show_inventory fail: {:?}", e);
+                                // }
+                            }
+                        }
+                        // console_log!("output succeeded: {:?}", item.type_);
                     }
                 } else {
-                    console_log!("output failed");
+                    // console_log!("output failed");
                 }
             }
         } else {
             self.cooldown -= 1.;
         }
+        Ok(FrameProcResult::None)
     }
 
     fn rotate(&mut self) -> Result<(), ()> {
@@ -486,14 +503,17 @@ impl Structure for Chest {
         )
     }
 
-    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponse, ()> {
+    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
         if self.inventory.len() < CHEST_CAPACITY {
             if let Some(item_ref) = self.inventory.get_mut(&item_to_str(&_item.type_)) {
                 *item_ref += 1;
             } else {
                 self.inventory.insert(item_to_str(&_item.type_), 1);
             }
-            Ok(ItemResponse::Consume)
+            Ok((
+                ItemResponse::Consume,
+                Some(FrameProcResult::InventoryChanged(self.position)),
+            ))
         } else {
             Err(())
         }
@@ -616,10 +636,10 @@ impl Structure for OreMine {
         &mut self,
         state: &mut FactorishState,
         _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
-    ) {
+    ) -> Result<FrameProcResult, ()> {
         let otile = &state.tile_at(&[self.position.x, self.position.y]);
         if otile.is_none() {
-            return;
+            return Ok(FrameProcResult::None);
         }
         let tile = otile.unwrap();
 
@@ -676,6 +696,7 @@ impl Structure for OreMine {
                 self.power -= progress * recipe.power_cost;
             }
         }
+        Ok(FrameProcResult::None)
     }
 
     fn rotate(&mut self) -> Result<(), ()> {
@@ -688,11 +709,11 @@ impl Structure for OreMine {
         Ok(())
     }
 
-    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponse, ()> {
+    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
         if item.type_ == ItemType::CoalOre && self.power == 0. {
             self.max_power = 100.;
             self.power = 100.;
-            Ok(ItemResponse::Consume)
+            Ok((ItemResponse::Consume, None))
         } else {
             Err(())
         }
@@ -763,6 +784,8 @@ pub struct FactorishState {
     viewport_height: f64,
     board: Vec<Cell>,
     structures: Vec<Box<dyn Structure>>,
+    selected_structure_inventory: Option<Position>,
+    selected_structure_item: Option<String>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
     selected_tool: Option<usize>,
@@ -773,7 +796,7 @@ pub struct FactorishState {
     cursor: Option<[i32; 2]>,
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
-
+    // on_show_inventory: js_sys::Function,
     image_dirt: Option<HtmlImageElement>,
     image_ore: Option<HtmlImageElement>,
     image_coal: Option<HtmlImageElement>,
@@ -802,7 +825,10 @@ enum RotateErr {
 #[wasm_bindgen]
 impl FactorishState {
     #[wasm_bindgen(constructor)]
-    pub fn new(on_player_update: js_sys::Function) -> Result<FactorishState, JsValue> {
+    pub fn new(
+        on_player_update: js_sys::Function,
+        // on_show_inventory: js_sys::Function,
+    ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
         let width = 64;
@@ -869,17 +895,34 @@ impl FactorishState {
                 Box::new(TransportBelt::new(12, 3, Rotation::Left)),
                 Box::new(OreMine::new(12, 2, Rotation::Bottom)),
             ],
+            selected_structure_inventory: None,
+            selected_structure_item: None,
             drop_items: vec![],
             serial_no: 0,
             on_player_update,
+            // on_show_inventory,
         })
     }
 
     #[wasm_bindgen]
-    pub fn simulate(&mut self, delta_time: f64) -> Result<(), JsValue> {
+    pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         self.delta_time = delta_time;
         self.sim_time += delta_time;
+
+        // Since we cannot use callbacks to report events to the JavaScript environment,
+        // we need to accumulate events during simulation and return them as an array.
+        let mut events = vec![];
+
+        let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| {
+            if let Ok(FrameProcResult::InventoryChanged(pos)) = result {
+                events.push(js_sys::Array::of3(
+                    &JsValue::from_str("updateStructureInventory"),
+                    &JsValue::from(pos.x),
+                    &JsValue::from(pos.y),
+                ))
+            }
+        };
 
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
@@ -890,12 +933,14 @@ impl FactorishState {
                 let (center, last) = mid
                     .split_first_mut()
                     .ok_or(JsValue::from_str("Structures split fail"))?;
-                center.frame_proc(self, &mut front.into_iter().chain(last.into_iter()));
+                frame_proc_result_to_event(
+                    center.frame_proc(self, &mut front.into_iter().chain(last.into_iter())),
+                );
             } else {
                 let (center, last) = structures
                     .split_first_mut()
                     .ok_or(JsValue::from_str("Structures split fail"))?;
-                center.frame_proc(self, &mut last.iter_mut());
+                frame_proc_result_to_event(center.frame_proc(self, &mut last.iter_mut()));
             }
         }
         // for structure in &mut structures {
@@ -910,36 +955,40 @@ impl FactorishState {
                 && 0 < item.y
                 && item.y < self.height as i32 * tilesize
             {
-                match structures
+                if let Some(item_response_result) = structures
                     .iter_mut()
                     .find(|s| s.position().x == item.x / 32 && s.position().y == item.y / 32)
                     .and_then(|structure| structure.item_response(item).ok())
                 {
-                    Some(ItemResponse::Move(moved_x, moved_y)) => {
-                        if self.hit_check(moved_x, moved_y, Some(item.id)) {
-                            continue;
-                        }
-                        if let Some(s) = structures.iter().find(|s| {
-                            s.position()
-                                == &Position {
-                                    x: moved_x / 32,
-                                    y: moved_y / 32,
-                                }
-                        }) {
-                            if !s.movable() {
+                    match item_response_result.0 {
+                        ItemResponse::Move(moved_x, moved_y) => {
+                            if self.hit_check(moved_x, moved_y, Some(item.id)) {
                                 continue;
                             }
-                        } else {
-                            continue;
+                            if let Some(s) = structures.iter().find(|s| {
+                                s.position()
+                                    == &Position {
+                                        x: moved_x / 32,
+                                        y: moved_y / 32,
+                                    }
+                            }) {
+                                if !s.movable() {
+                                    continue;
+                                }
+                            } else {
+                                continue;
+                            }
+                            let item = &mut self.drop_items[i];
+                            item.x = moved_x;
+                            item.y = moved_y;
                         }
-                        let item = &mut self.drop_items[i];
-                        item.x = moved_x;
-                        item.y = moved_y;
+                        ItemResponse::Consume => {
+                            to_remove.push(item.id);
+                        }
                     }
-                    Some(ItemResponse::Consume) => {
-                        to_remove.push(item.id);
+                    if let Some(result) = item_response_result.1 {
+                        frame_proc_result_to_event(Ok(result));
                     }
-                    _ => {}
                 }
             }
         }
@@ -951,7 +1000,7 @@ impl FactorishState {
         self.structures = structures;
         // self.drop_items = drop_items;
         self.update_info();
-        Ok(())
+        Ok(events.iter().collect())
     }
 
     fn tile_at(&self, tile: &[i32]) -> Option<Cell> {
@@ -1179,6 +1228,44 @@ impl FactorishState {
         self.player.select_item(name)
     }
 
+    pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<(), JsValue> {
+        let pos = Position { x: c, y: r };
+        if self.find_structure_tile(&[pos.x, pos.y]).is_some() {
+            self.selected_structure_inventory = Some(pos);
+            Ok(())
+        } else {
+            Err(JsValue::from_str("structure not found"))
+        }
+    }
+
+    pub fn get_structure_inventory(&self, c: i32, r: i32) -> Result<js_sys::Array, JsValue> {
+        if let Some(structure) = self.find_structure_tile(&[c, r]) {
+            if let Some(inventory) = structure.inventory() {
+                return Ok(js_sys::Array::of2(
+                    &inventory
+                        .iter()
+                        .map(|pair| {
+                            js_sys::Array::of2(
+                                &JsValue::from_str(pair.0),
+                                &JsValue::from_f64(*pair.1 as f64),
+                            )
+                        })
+                        .collect::<js_sys::Array>(),
+                    &JsValue::from_str(
+                        &self
+                            .selected_structure_item
+                            .as_ref()
+                            .map(|s| s as &str)
+                            .unwrap_or(&""),
+                    ),
+                ));
+            }
+        }
+        Err(JsValue::from_str(
+            "structure is not found or doesn't have inventory",
+        ))
+    }
+
     fn new_structure(
         &self,
         tool_index: usize,
@@ -1192,7 +1279,7 @@ impl FactorishState {
         })
     }
 
-    pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<(), JsValue> {
+    pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<JsValue, JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
@@ -1223,13 +1310,26 @@ impl FactorishState {
                             .unwrap_or(JsValue::from(true));
                     }
                 }
+            } else {
+                // Select clicked structure
+                console_log!("opening inventory at {:?}", cursor);
+                if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
+                    // self.on_show_inventory.call0(&window()).unwrap();
+                    return Ok(JsValue::from(js_sys::Array::of3(
+                        &JsValue::from_str("showInventory"),
+                        &JsValue::from(cursor.x),
+                        &JsValue::from(cursor.y),
+                    )));
+                    // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
+                    // inventory_elem.style().set_property("display", "block").unwrap();
+                }
             }
         } else {
             self.harvest(&cursor)?;
         }
         console_log!("clicked: {}, {}", cursor.x, cursor.y);
         self.update_info();
-        Ok(())
+        Ok(JsValue::null())
     }
 
     pub fn mouse_move(&mut self, pos: &[f64]) -> Result<(), JsValue> {

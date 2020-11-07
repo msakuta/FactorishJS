@@ -219,6 +219,10 @@ window.onload = async function(){
         updateInventoryInt(playerInventoryElem, sim, false, inventory);
     }
 
+    function updateStructureInventory(x, y){
+        updateInventoryInt(document.getElementById('inventory2Content'), sim, false, sim.get_structure_inventory(x, y));
+    }
+
     function generateItemImage(i, iconSize, count){
         var img = document.createElement('div');
         var imageFile = getImageFile(i);
@@ -397,8 +401,8 @@ window.onload = async function(){
         mousecaptorElem.style.zIndex = i + windowZIndex; // The mouse capture element comes on top of all other windows
     }
 
-    function showInventory(){
-        var inventoryContent = document.getElementById('inventoryContent');
+    function showInventory(c, r){
+        var inventoryContent = document.getElementById('inventory2Content');
         if(inventoryElem.style.display !== "none"){
             inventoryElem.style.display = "none";
             return;
@@ -411,7 +415,7 @@ window.onload = async function(){
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
             // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
-            // updateInventory();
+            updateInventoryInt(inventoryContent, sim, false, sim.get_structure_inventory(c, r));
         }
         // else{
         //     inventoryContent.innerHTML = "";
@@ -452,9 +456,13 @@ window.onload = async function(){
     playerElem.appendChild(playerInventoryElem);
 
     canvas.addEventListener("mousedown", function(evt){
-        const command = sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
-        if(command == "showInventory")
-            showInventory();
+        const result = sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
+        if(result !== null){
+            const [command, x, y] = result;
+            if(command === "showInventory"){
+                showInventory(x, y);
+            }
+        }
         updateToolBar();
         evt.stopPropagation();
         evt.preventDefault();
@@ -482,7 +490,13 @@ window.onload = async function(){
     updateInventory(sim.get_player_inventory());
 
     window.setInterval(function(){
-        sim.simulate(0.05);
+        let events = sim.simulate(0.05);
+        for(let event of events){
+            if(event[0] === "updateStructureInventory"){
+                console.log("updateStructureInventory event received");
+                updateStructureInventory(event[1], event[2]);
+            }
+        }
         let result = sim.render(ctx);
         // console.log(result);
     }, 50);
