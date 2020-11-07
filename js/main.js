@@ -287,16 +287,15 @@ window.onload = async function(){
             div.itemName = name;
             div.itemAmount = v;
             div.onclick = function(){
-                if(selectedInventory !== owner || selectedInventoryItem !== this.itemName){
-                    selectedInventory = owner;
-                    selectedInventoryItem = this.itemName;
+                selectedInventory = owner;
+                selectedInventoryItem = this.itemName;
+                if(elem === playerInventoryElem){
+                    sim.select_player_inventory(selectedInventoryItem);
                 }
                 else{
-                    selectedInventory = null;
-                    selectedInventoryItem = null;
+                    sim.select_structure_inventory(selectedInventoryItem);
                 }
-                sim.select_player_inventory(selectedInventoryItem);
-                updateInventorySelection(playerInventoryElem);
+                updateInventorySelection(elem);
                 // if(inventoryTarget && inventoryTarget.inventory)
                 //     updateInventorySelection(document.getElementById('inventoryContent'), inventoryTarget);
             };

@@ -1266,6 +1266,11 @@ impl FactorishState {
         ))
     }
 
+    pub fn select_structure_inventory(&mut self, name: &str) -> Result<(), JsValue> {
+        self.selected_structure_item = Some(name.to_string());
+        Ok(())
+    }
+
     fn new_structure(
         &self,
         tool_index: usize,
