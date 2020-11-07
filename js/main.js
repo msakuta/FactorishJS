@@ -21,6 +21,7 @@ window.onload = async function(){
     var selectedInventoryItem = null;
 
     const tilesize = 32;
+    var windowZIndex = 1000;
     const objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
     const tableMargin = 10.;
     const miniMapSize = 200;
@@ -307,7 +308,126 @@ window.onload = async function(){
         }
     }
 
+    inventoryElem.ondragover = function(ev){
+        var ok = false;
+        for(var i = 0; i < ev.dataTransfer.types.length; i++){
+            if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
+                ok = true;
+        }
+        if(ok){
+            ev.preventDefault();
+            // Set the dropEffect to move
+            ev.dataTransfer.dropEffect = "move";
+        }
+    }
+    inventoryElem.ondrop = function(ev){
+        ev.preventDefault();
+        var data = JSON.parse(ev.dataTransfer.getData(textType));
+        if(inventoryTarget && inventoryTarget.inventory && data.fromPlayer){
+            var fromInventory = player.inventory;
+            // The amount could have changed during dragging, so we'll query current value
+            // from the source inventory.
+            var movedAmount = inventoryTarget.addItem({type: data.type, amount: fromInventory[data.type]});
+            if(0 < movedAmount){
+                player.removeItem(data.type, movedAmount);
+                updatePlayer();
+            }
+        }
+    }
     inventoryElem.style.display = 'none';
+    const inventory2CloseButton = document.getElementById("inventory2CloseButton");
+    inventory2CloseButton.addEventListener("click", function(){
+        inventoryElem.style.display = "none";
+    });
+
+    function dragWindowMouseDown(evt,elem,pos){
+        pos = [evt.screenX, evt.screenY];
+        bringToTop(elem);
+        var mousecaptorElem = document.getElementById('mousecaptor');
+        mousecaptorElem.style.display = 'block';
+
+        // Dragging moves windows
+        function mousemove(evt){
+            if(!pos)
+                return;
+            var containerElem = document.getElementById('container');
+            var cr = containerElem.getBoundingClientRect();
+            var rel = [evt.screenX - pos[0], evt.screenY - pos[1]];
+            pos = [evt.screenX, evt.screenY];
+            var r = elem.getBoundingClientRect();
+            var left = elem.style.left !== '' ? parseInt(elem.style.left) : (cr.left + cr.right) / 2;
+            var top = elem.style.top !== '' ? parseInt(elem.style.top) : (cr.top + cr.bottom) / 2;
+            elem.style.left = (left + rel[0]) + 'px';
+            elem.style.top = (top + rel[1]) + 'px';
+        }
+        
+        mousecaptorElem.addEventListener('mousemove', mousemove);
+        mousecaptorElem.addEventListener('mouseup', function(evt){
+            // Stop dragging a window
+            elem = null;
+            this.removeEventListener('mousemove', mousemove);
+            this.style.display = 'none';
+        });
+    }
+
+    /// An array of window elements which holds order of z indices.
+    var windowOrder = [];
+
+    var inventoryDragStart = null;
+
+    var inventoryTitleElem = document.getElementById('inventory2Title');
+
+    placeCenter(inventoryElem);
+    windowOrder.push(inventoryElem);
+
+    inventoryTitleElem.addEventListener('mousedown', function(evt){
+        dragWindowMouseDown(evt, inventoryElem, inventoryDragStart);
+    });
+
+    /// Bring a window to the top on the other windows.
+    function bringToTop(elem){
+        var oldIdx = windowOrder.indexOf(elem);
+        if(0 <= oldIdx && oldIdx < windowOrder.length - 1){
+            windowOrder.splice(oldIdx, 1);
+            windowOrder.push(elem);
+            for(var i = 0; i < windowOrder.length; i++)
+                windowOrder[i].style.zIndex = i + windowZIndex;
+        }
+        var mousecaptorElem = document.getElementById('mousecaptor');
+        mousecaptorElem.style.zIndex = i + windowZIndex; // The mouse capture element comes on top of all other windows
+    }
+
+    function showInventory(){
+        var inventoryContent = document.getElementById('inventoryContent');
+        if(inventoryElem.style.display !== "none"){
+            inventoryElem.style.display = "none";
+            return;
+        }
+        // else if(tile.structure && tile.structure.inventory){
+        else{
+            inventoryElem.style.display = "block";
+            bringToTop(inventoryElem);
+            // inventoryTarget = tile.structure;
+            // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
+            // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
+            // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
+            // updateInventory();
+        }
+        // else{
+        //     inventoryContent.innerHTML = "";
+        // }
+    }
+
+    // Place a window element at the center of the container, assumes the windows have margin set in the middle.
+    function placeCenter(elem){
+        var containerElem = document.getElementById('container2');
+        var cr = containerElem.getBoundingClientRect();
+        elem.style.left = ((cr.left + cr.right) / 2) + 'px';
+        elem.style.top = ((cr.top + cr.bottom) / 2) + 'px';
+    }
+
+    placeCenter(inventoryElem);
+    windowOrder.push(inventoryElem);
 
     const playerElem = document.createElement('div');
     playerElem.style.overflow = 'visible';
@@ -332,7 +452,9 @@ window.onload = async function(){
     playerElem.appendChild(playerInventoryElem);
 
     canvas.addEventListener("mousedown", function(evt){
-        sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
+        const command = sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
+        if(command == "showInventory")
+            showInventory();
         updateToolBar();
         evt.stopPropagation();
         evt.preventDefault();

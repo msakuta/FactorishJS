@@ -20,7 +20,7 @@
 				line-height: 80%;
 			}
 
-			#inventory{
+			#inventory, #inventory2{
 				position: absolute;
 				width: 355px;
 				height: 160px;
@@ -33,19 +33,19 @@
 				text-align: left;
 			}
 
-			#inventoryTitle{
+			#inventoryTitle, #inventory2Title{
 				width: 100%;
 				height: 20px;
 				background-color: #7f7fff;
 			}
 
-			#inventoryClient{
+			#inventoryClient, #inventory2Client{
 				position: relative;
 				width: 100%;
 				height: 140px;
 			}
 
-			#inventoryContent{
+			#inventoryContent, #inventory2Content{
 				right: 0;
 				top: 20px;
 				width: 320px;
@@ -179,7 +179,7 @@
 				<canvas id="canvas" width="640" height="480"></canvas>
 				<div id="inventory2" class="noselect">
 					<div id="inventory2Title">Inventory</div>
-					<div class="closeButton" onclick="Conveyor.hideInventory()"></div>
+					<div class="closeButton" id="inventory2CloseButton"></div>
 					<div id="inventory2Client">
 						<img id="inventory2List" draggable="false" src="img/list.png" style="position: absolute">
 						<img id="inventory2Icons" draggable="false" src="img/icons.png" style="position: absolute; left: 0px; top: 32px">
