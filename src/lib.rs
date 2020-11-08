@@ -1245,6 +1245,16 @@ impl FactorishState {
         }
     }
 
+    pub fn get_selected_inventory(&self) -> Result<JsValue, JsValue> {
+        if let Some(pos) = self.selected_structure_inventory {
+            return Ok(JsValue::from(js_sys::Array::of2(
+                &JsValue::from(pos.x),
+                &JsValue::from(pos.y),
+            )));
+        }
+        Ok(JsValue::null())
+    }
+
     pub fn get_structure_inventory(&self, c: i32, r: i32) -> Result<js_sys::Array, JsValue> {
         if let Some(structure) = self.find_structure_tile(&[c, r]) {
             if let Some(inventory) = structure.inventory() {
@@ -1318,6 +1328,34 @@ impl FactorishState {
             if let Some(inventory) = self.structures[idx].inventory_mut() {
                 FactorishState::move_inventory_item(inventory, &mut self.player.inventory, name);
                 return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn move_selected_inventory_item(&mut self, to_player: bool) -> Result<bool, JsValue> {
+        if let Some(pos) = self.selected_structure_inventory {
+            if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {
+                if let Some(inventory) = self.structures[idx].inventory_mut() {
+                    let (src, dst, name) = if to_player {
+                        (
+                            inventory,
+                            &mut self.player.inventory,
+                            &self.selected_structure_item,
+                        )
+                    } else {
+                        (
+                            &mut self.player.inventory,
+                            inventory,
+                            &self.player.selected_item,
+                        )
+                    };
+                    console_log!("moving {:?}", name);
+                    if let Some(name) = name {
+                        FactorishState::move_inventory_item(src, dst, name);
+                        return Ok(true);
+                    }
+                }
             }
         }
         Ok(false)

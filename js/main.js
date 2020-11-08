@@ -26,7 +26,6 @@ window.onload = async function(){
     container.appendChild(infoElem);
 
     var selectedInventory = null;
-    var selectedInventoryItem = null;
 
     const tilesize = 32;
     const textType = isIE() ? "Text" : "text/plain";
@@ -229,8 +228,9 @@ window.onload = async function(){
         updateInventoryInt(playerInventoryElem, sim, false, inventory);
     }
 
-    function updateStructureInventory(x, y){
-        updateInventoryInt(document.getElementById('inventory2Content'), sim, false, sim.get_structure_inventory(x, y));
+    function updateStructureInventory(){
+        updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(
+            ...sim.get_selected_inventory()));
     }
 
     function generateItemImage(i, iconSize, count){
@@ -296,7 +296,7 @@ window.onload = async function(){
             div.setAttribute('class', 'noselect');
             div.itemName = name;
             div.itemAmount = v;
-            div.onclick = function(){
+            div.onclick = function(evt){
                 selectedInventory = owner;
                 selectedInventoryItem = this.itemName;
                 if(elem === playerInventoryElem){
@@ -308,6 +308,7 @@ window.onload = async function(){
                 updateInventorySelection(elem);
                 // if(inventoryTarget && inventoryTarget.inventory)
                 //     updateInventorySelection(document.getElementById('inventoryContent'), inventoryTarget);
+                evt.stopPropagation();
             };
             div.setAttribute('draggable', 'true');
             div.ondragstart = function(ev){
@@ -351,6 +352,12 @@ window.onload = async function(){
         }
     }
     inventoryElem.style.display = 'none';
+
+    const inventoryContentElem = document.getElementById('inventory2Content');
+    inventoryContentElem.onclick = function(){
+        onInventoryClick(false);
+    };
+
     const inventory2CloseButton = document.getElementById("inventory2CloseButton");
     inventory2CloseButton.addEventListener("click", function(){
         inventoryElem.style.display = "none";
@@ -414,7 +421,6 @@ window.onload = async function(){
     }
 
     function showInventory(c, r){
-        var inventoryContent = document.getElementById('inventory2Content');
         if(inventoryElem.style.display !== "none"){
             inventoryElem.style.display = "none";
             return;
@@ -427,7 +433,7 @@ window.onload = async function(){
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
             // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
-            updateInventoryInt(inventoryContent, sim, false, sim.get_structure_inventory(c, r));
+            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(c, r));
         }
         // else{
         //     inventoryContent.innerHTML = "";
@@ -483,12 +489,22 @@ window.onload = async function(){
         if(!data.fromPlayer && inventoryTarget){
             if(sim.move_inventory_item_to_player(inventoryTarget, data.type)){
                 updateInventory(sim.get_player_inventory());
-                updateStructureInventory(...inventoryTarget);
+                updateStructureInventory();
             }
         }
     }
-    playerInventoryElem.onclick = function(){onInventoryClick(player)};
+    playerInventoryElem.onclick = function(){onInventoryClick(true)};
     playerElem.appendChild(playerInventoryElem);
+
+    function onInventoryClick(isPlayer){
+        // Update only if the selected inventory is the other one from destination.
+        if(sim.get_selected_inventory() !== null){
+            if(sim.move_selected_inventory_item(isPlayer)){
+                    updateInventory(sim.get_player_inventory());
+                    updateStructureInventory();
+                }
+        }
+    }
 
     canvas.addEventListener("mousedown", function(evt){
         const result = sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
