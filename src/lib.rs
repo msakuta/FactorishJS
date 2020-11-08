@@ -191,6 +191,9 @@ trait Structure {
     fn inventory(&self) -> Option<&HashMap<String, usize>> {
         None
     }
+    fn inventory_mut(&mut self) -> Option<&mut HashMap<String, usize>> {
+        None
+    }
 }
 
 const tilesize: i32 = 32;
@@ -551,6 +554,10 @@ impl Structure for Chest {
 
     fn inventory(&self) -> Option<&HashMap<String, usize>> {
         Some(&self.inventory)
+    }
+
+    fn inventory_mut(&mut self) -> Option<&mut HashMap<String, usize>> {
+        Some(&mut self.inventory)
     }
 }
 
@@ -1269,6 +1276,51 @@ impl FactorishState {
     pub fn select_structure_inventory(&mut self, name: &str) -> Result<(), JsValue> {
         self.selected_structure_item = Some(name.to_string());
         Ok(())
+    }
+
+    fn move_inventory_item(
+        src: &mut HashMap<String, usize>,
+        dst: &mut HashMap<String, usize>,
+        name: &str,
+    ) -> bool {
+        if let Some(src_item) = src.get(name) {
+            if let Some(dest_item) = dst.get_mut(name) {
+                *dest_item += *src_item;
+            } else {
+                dst.insert(name.to_string(), *src_item);
+            }
+            src.remove(name);
+            return true;
+        }
+        false
+    }
+
+    pub fn move_inventory_item_to_structure(
+        &mut self,
+        pos: &[i32],
+        name: &str,
+    ) -> Result<bool, JsValue> {
+        if let Some(idx) = self.find_structure_tile_idx(pos) {
+            if let Some(inventory) = self.structures[idx].inventory_mut() {
+                FactorishState::move_inventory_item(&mut self.player.inventory, inventory, name);
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn move_inventory_item_to_player(
+        &mut self,
+        pos: &[i32],
+        name: &str,
+    ) -> Result<bool, JsValue> {
+        if let Some(idx) = self.find_structure_tile_idx(pos) {
+            if let Some(inventory) = self.structures[idx].inventory_mut() {
+                FactorishState::move_inventory_item(inventory, &mut self.player.inventory, name);
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn new_structure(

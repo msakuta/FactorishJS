@@ -1,5 +1,13 @@
 import init, { FactorishState } from "../pkg/factorish_js.js";
 
+/// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
+function isIE(){
+    var ua = window.navigator.userAgent;
+    var msie = ua.indexOf('MSIE ');
+    var trident = ua.indexOf('Trident/');
+    return msie > 0 || trident > 0;
+}
+
 window.onload = async function(){
     await init();
     let sim = new FactorishState(updateInventory);
@@ -21,8 +29,10 @@ window.onload = async function(){
     var selectedInventoryItem = null;
 
     const tilesize = 32;
+    const textType = isIE() ? "Text" : "text/plain";
     var windowZIndex = 1000;
     const objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
+    let inventoryTarget = null;
     const tableMargin = 10.;
     const miniMapSize = 200;
     const miniMapElem = document.createElement('div');
@@ -305,7 +315,7 @@ window.onload = async function(){
                 ev.dataTransfer.dropEffect = 'move';
                 // Encode information to determine item to drop into a JSON
                 ev.dataTransfer.setData(textType, JSON.stringify(
-                    {type: ev.target.itemName, fromPlayer: owner === player}));
+                    {type: ev.target.itemName, fromPlayer: elem === playerInventoryElem}));
             };
             elem.appendChild(div);
         }
@@ -326,15 +336,18 @@ window.onload = async function(){
     inventoryElem.ondrop = function(ev){
         ev.preventDefault();
         var data = JSON.parse(ev.dataTransfer.getData(textType));
-        if(inventoryTarget && inventoryTarget.inventory && data.fromPlayer){
-            var fromInventory = player.inventory;
+        if(inventoryTarget && data.fromPlayer){
             // The amount could have changed during dragging, so we'll query current value
             // from the source inventory.
-            var movedAmount = inventoryTarget.addItem({type: data.type, amount: fromInventory[data.type]});
-            if(0 < movedAmount){
-                player.removeItem(data.type, movedAmount);
-                updatePlayer();
+            if(sim.move_inventory_item_to_structure(inventoryTarget, data.type)){
+                updateInventory(sim.get_player_inventory());
+                updateStructureInventory(...inventoryTarget);
             }
+            // var movedAmount = inventoryTarget.addItem({type: data.type, amount: fromInventory[data.type]});
+            // if(0 < movedAmount){
+            //     player.removeItem(data.type, movedAmount);
+            //     updatePlayer();
+            // }
         }
     }
     inventoryElem.style.display = 'none';
@@ -410,7 +423,7 @@ window.onload = async function(){
         else{
             inventoryElem.style.display = "block";
             bringToTop(inventoryElem);
-            // inventoryTarget = tile.structure;
+            inventoryTarget = [c, r];
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
             // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
