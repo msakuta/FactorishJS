@@ -465,6 +465,29 @@ window.onload = async function(){
     playerInventoryElem.style.width = '100%';
     playerInventoryElem.style.height = '100%';
     playerInventoryElem.style.textAlign = 'left';
+    playerInventoryElem.ondragover = function(ev){
+        var ok = false;
+        for(var i = 0; i < ev.dataTransfer.types.length; i++){
+            if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
+                ok = true;
+        }
+        if(ok){
+            ev.preventDefault();
+            // Set the dropEffect to move
+            ev.dataTransfer.dropEffect = "move";
+        }
+    }
+    playerInventoryElem.ondrop = function(ev){
+        ev.preventDefault();
+        var data = JSON.parse(ev.dataTransfer.getData(textType));
+        if(!data.fromPlayer && inventoryTarget){
+            if(sim.move_inventory_item_to_player(inventoryTarget, data.type)){
+                updateInventory(sim.get_player_inventory());
+                updateStructureInventory(...inventoryTarget);
+            }
+        }
+    }
+    playerInventoryElem.onclick = function(){onInventoryClick(player)};
     playerElem.appendChild(playerInventoryElem);
 
     canvas.addEventListener("mousedown", function(evt){
