@@ -1305,34 +1305,6 @@ impl FactorishState {
         false
     }
 
-    pub fn move_inventory_item_to_structure(
-        &mut self,
-        pos: &[i32],
-        name: &str,
-    ) -> Result<bool, JsValue> {
-        if let Some(idx) = self.find_structure_tile_idx(pos) {
-            if let Some(inventory) = self.structures[idx].inventory_mut() {
-                FactorishState::move_inventory_item(&mut self.player.inventory, inventory, name);
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    pub fn move_inventory_item_to_player(
-        &mut self,
-        pos: &[i32],
-        name: &str,
-    ) -> Result<bool, JsValue> {
-        if let Some(idx) = self.find_structure_tile_idx(pos) {
-            if let Some(inventory) = self.structures[idx].inventory_mut() {
-                FactorishState::move_inventory_item(inventory, &mut self.player.inventory, name);
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
     pub fn move_selected_inventory_item(&mut self, to_player: bool) -> Result<bool, JsValue> {
         if let Some(pos) = self.selected_structure_inventory {
             if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {

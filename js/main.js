@@ -31,7 +31,6 @@ window.onload = async function(){
     const textType = isIE() ? "Text" : "text/plain";
     var windowZIndex = 1000;
     const objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
-    let inventoryTarget = null;
     const tableMargin = 10.;
     const miniMapSize = 200;
     const miniMapElem = document.createElement('div');
@@ -228,9 +227,9 @@ window.onload = async function(){
         updateInventoryInt(playerInventoryElem, sim, false, inventory);
     }
 
-    function updateStructureInventory(){
+    function updateStructureInventory(pos){
         updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...sim.get_selected_inventory()));
+            ...(pos ? pos : sim.get_selected_inventory())));
     }
 
     function generateItemImage(i, iconSize, count){
@@ -296,9 +295,11 @@ window.onload = async function(){
             div.setAttribute('class', 'noselect');
             div.itemName = name;
             div.itemAmount = v;
-            div.onclick = function(evt){
+            /// Either clicking or start dragging will select the item, so that
+            /// it can be moved on drop
+            function selectThisItem(itemName){
                 selectedInventory = owner;
-                selectedInventoryItem = this.itemName;
+                selectedInventoryItem = itemName;
                 if(elem === playerInventoryElem){
                     sim.select_player_inventory(selectedInventoryItem);
                 }
@@ -306,13 +307,15 @@ window.onload = async function(){
                     sim.select_structure_inventory(selectedInventoryItem);
                 }
                 updateInventorySelection(elem);
-                // if(inventoryTarget && inventoryTarget.inventory)
-                //     updateInventorySelection(document.getElementById('inventoryContent'), inventoryTarget);
+            };
+            div.onclick = function(evt){
+                selectThisItem(this.itemName);
                 evt.stopPropagation();
             };
             div.setAttribute('draggable', 'true');
             div.ondragstart = function(ev){
                 console.log("dragStart");
+                selectThisItem(this.itemName);
                 ev.dataTransfer.dropEffect = 'move';
                 // Encode information to determine item to drop into a JSON
                 ev.dataTransfer.setData(textType, JSON.stringify(
@@ -337,18 +340,13 @@ window.onload = async function(){
     inventoryElem.ondrop = function(ev){
         ev.preventDefault();
         var data = JSON.parse(ev.dataTransfer.getData(textType));
-        if(inventoryTarget && data.fromPlayer){
+        if(data.fromPlayer){
             // The amount could have changed during dragging, so we'll query current value
             // from the source inventory.
-            if(sim.move_inventory_item_to_structure(inventoryTarget, data.type)){
+            if(sim.move_selected_inventory_item(!data.fromPlayer)){
                 updateInventory(sim.get_player_inventory());
-                updateStructureInventory(...inventoryTarget);
+                updateStructureInventory();
             }
-            // var movedAmount = inventoryTarget.addItem({type: data.type, amount: fromInventory[data.type]});
-            // if(0 < movedAmount){
-            //     player.removeItem(data.type, movedAmount);
-            //     updatePlayer();
-            // }
         }
     }
     inventoryElem.style.display = 'none';
@@ -429,7 +427,6 @@ window.onload = async function(){
         else{
             inventoryElem.style.display = "block";
             bringToTop(inventoryElem);
-            inventoryTarget = [c, r];
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
             // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
@@ -486,8 +483,8 @@ window.onload = async function(){
     playerInventoryElem.ondrop = function(ev){
         ev.preventDefault();
         var data = JSON.parse(ev.dataTransfer.getData(textType));
-        if(!data.fromPlayer && inventoryTarget){
-            if(sim.move_inventory_item_to_player(inventoryTarget, data.type)){
+        if(!data.fromPlayer){
+            if(sim.move_selected_inventory_item(!data.fromPlayer)){
                 updateInventory(sim.get_player_inventory());
                 updateStructureInventory();
             }
@@ -545,7 +542,7 @@ window.onload = async function(){
         for(let event of events){
             if(event[0] === "updateStructureInventory"){
                 console.log("updateStructureInventory event received");
-                updateStructureInventory(event[1], event[2]);
+                updateStructureInventory([event[1], event[2]]);
             }
         }
         let result = sim.render(ctx);
