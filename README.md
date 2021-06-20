@@ -24,6 +24,7 @@ How to play
 -----------
 
 If you have played Factorio, it should be straightforward.
+It is similar to Factorio's god mode, where there is no physical player but you can manipulate buildings directly.
 
 * Cursor
 
@@ -35,6 +36,7 @@ This indicates a tile under the mouse cursor.
 
 Right clicking on a building or ore harvests it.
 If it was an ore deposit, it takes some time to mine an ore.
+The progress of mining is shown as a progress bar on top of the cursor.
 
 ![harvesting](readme-img/harvesting.png)
 
@@ -56,7 +58,7 @@ Left-clicking will place the building.
 
 * Directions
 
-Some buildings have directions. It changes which direction transport belts carry items on them, which way an ore miner outputs mined ores, etc.
+Some buildings have directions. It can affect behavior of certain buildings. For example, transport belts carry items towards the direction, an ore miner outputs mined ores to this direction, an inserter picks up item from opposite side of the direction and puts on the indicated side, etc.
 You can rotate current direction by hitting R key or clicking the button below.
 
 ![building-left](readme-img/rotate-button.png)
@@ -65,6 +67,39 @@ You can see the current direction on the tool belt.
 
 ![building-left](readme-img/building-left.png)
 ![building-up](readme-img/building-up.png)
+
+* Getting/putting items from/to buildings
+
+Some buildings show a tooltip like below. 
+
+![building-inventory-tooltip](readme-img/building-inventory-tooltip.png)
+
+You can left-click to open the inventrory window of the building.
+
+![building-inventory-window](readme-img/building-inventory-window.png)
+
+You can drag items between the building inventory and player inventory to transport items.
+Or, if you use touch pad, you can tap one item and tap an empty space of the other inventry.
+
+* Setting a recipe for an assembler
+
+An assembler has a special button in its inventory window.
+This is a button to select a recipe for this assembler.
+
+![assembler-inventory](readme-img/assembler-inventory.png)
+
+Clicking on the button shows a new window like this.
+Here is a list of recipes that the assembler can use to craft items.
+On the left are required items to input, and on the right are the items to output.
+Input has time icon ![time-icon](img/time.png), whose number indicates in-game tick count (not seconds).
+Clicking one of the items in the list sets the recipe.
+
+![assembler-recipe](readme-img/assembler-recipe.png)
+
+Note that you need to put inserters and electricity to make it automated.
+You need at least some supply chain like below.
+
+![basic-setup](readme-img/basic-setup.png)
 
 Prerequisites
 -------------
