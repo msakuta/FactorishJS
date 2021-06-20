@@ -81,6 +81,21 @@ You can left-click to open the inventrory window of the building.
 You can drag items between the building inventory and player inventory to transport items.
 Or, if you use touch pad, you can tap one item and tap an empty space of the other inventry.
 
+* Electricity
+
+An assembler needs electricity to operate. You need to set up water well, boiler and steam engine to
+generate electricity.
+They can be connected with pipes to transport water and steam.
+
+Water well: ![water-well](readme-img/water-well.png)
+
+Boiler: ![boiler](readme-img/boiler.png)
+
+Steam Engine: ![steam engine](readme-img/steam-engine.png)
+
+Pipe: ![pipe](readme-img/pipe.png)
+
+
 * Setting a recipe for an assembler
 
 An assembler has a special button in its inventory window.
