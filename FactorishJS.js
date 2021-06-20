@@ -8,6 +8,10 @@ var viewPortWidth;
 var viewPortHeight;
 var board;
 var tileElems;
+var timerBarContainerElem;
+var timerBarElem;
+var popupTextContainerElem;
+var popupTexts = [];
 var scrollPos = [0, 0];
 var selectedTile = null;
 var selectedCoords = null;
@@ -29,6 +33,7 @@ var miniMapCursorElem;
 var recipeTarget = null;
 var simstep = 0;
 var autosave_frame = 0;
+var oreHarvesting = false;
 
 // Constants
 var tilesize = 32;
@@ -36,8 +41,11 @@ var objsize = tilesize / 3;
 var objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
 var textType = isIE() ? "Text" : "text/plain";
 var cursorZIndex = 900;
+var timerBarZIndex = 950;
 var windowZIndex = 1000;
+var popupTextZIndex = 2000;
 var tooltipZIndex = 10000;
+var oreHarvestInterval = 20;
 
 var toolBarElem;
 var toolElems = [];
@@ -1570,7 +1578,10 @@ function rotate(){
 /// the world and check with proc functon passed by the caller.
 /// if proc returns nonzero, the item is considered consumed and
 /// disappear from the ground.
+///
+/// @returns the number of items found and processed
 function findItem(sx, sy, proc, single){
+	let ret = 0;
 	for(var j = 0; j < objects.length;){
 		var o = objects[j];
 		var otx = Math.floor(o.x / tilesize);
@@ -1578,8 +1589,9 @@ function findItem(sx, sy, proc, single){
 		if(otx === sx && oty === sy && proc(o)){
 			table.removeChild(o.elem);
 			objects.splice(j, 1);
+			ret++;
 			if(single)
-				return;
+				return ret;
 		}
 		else{
 			// If we happend to successfully find the object and remove
@@ -1587,6 +1599,7 @@ function findItem(sx, sy, proc, single){
 			j++;
 		}
 	}
+	return ret;
 }
 
 function recipeDraw(recipe, onclick){
@@ -1917,9 +1930,12 @@ function harvest(tile){
 			miniMapElem.removeChild(tile.structure.miniMapSymbol);
 			tile.structure.miniMapSymbol = null;
 		}
+
+		var popupText = "";
 		if(tile.structure.inventory){
 			for(var i in tile.structure.inventory){
 				var v = tile.structure.inventory[i];
+				popupText += "+" + v + " " + i + "<br>";
 				if(i in player.inventory)
 					player.inventory[i] += v;
 				else
@@ -1930,6 +1946,14 @@ function harvest(tile){
 			player.inventory[tile.structure.name]++;
 		else
 			player.inventory[tile.structure.name] = 1;
+
+		popupText += "+1 " + tile.structure.name;
+
+		var x = board.indexOf(tile) % xsize;
+		var y = Math.floor(board.indexOf(tile) / xsize);
+		newPopupText(popupText, (x - scrollPos[0]) * tilesize,
+			(y - scrollPos[1]) * tilesize);
+
 		tile.structure = null;
 		updatePlayer();
 	}
@@ -1937,14 +1961,38 @@ function harvest(tile){
 		var idx = board.indexOf(tile);
 		var x = idx % ysize;
 		var y = Math.floor(idx / ysize);
-		findItem(x, y, function(o){
+		var popupText = "";
+		var foundItems = findItem(x, y, function(o){
 			if(o.type in player.inventory)
 				player.inventory[o.type] += 1;
 			else
 				player.inventory[o.type] = 1;
+			popupText += "+1" + o.type + "<br>";
 			updatePlayer();
 			return true;
-		});
+		})
+		if(foundItems !== 0)
+			newPopupText(popupText, (x - scrollPos[0]) * tilesize, (y - scrollPos[1]) * tilesize);
+		else{
+			var tile = board[x + y * ysize];
+			var oreType;
+			var itemType;
+			if(tile.ironOre !== 0)
+				oreType = "ironOre", itemType = "Iron Ore";
+			if(tile.copperOre !== 0)
+				oreType = "copperOre", itemType = "Copper Ore";
+			if(tile.coalOre !== 0)
+				oreType = "coalOre", itemType = "Coal Ore";
+			if(oreType){
+				oreHarvesting = {
+					oreType: oreType,
+					type: itemType,
+					x: x,
+					y: y,
+					timer: 0,
+				};
+			}
+		};
 	}
 }
 
@@ -2008,6 +2056,17 @@ function createElements(){
 	cursorGhostElem = document.createElement('div');
 	cursorGhostElem.style.opacity = 0.5;
 	cursorElem.appendChild(cursorGhostElem);
+
+	timerBarContainerElem = document.createElement('div');
+	timerBarContainerElem.style.border = '1px solid';
+	timerBarContainerElem.style.backgroundColor = 'rgb(31, 31, 31)';
+	timerBarContainerElem.style.pointerEvents = 'none';
+	timerBarContainerElem.style.display = 'none';
+	timerBarContainerElem.style.zIndex = timerBarZIndex;
+	timerBarElem = document.createElement('div');
+	timerBarElem.style.backgroundColor = 'rgb(255, 127, 255)';
+	timerBarContainerElem.appendChild(timerBarElem);
+	table.appendChild(timerBarContainerElem);
 
 	messageElem = document.createElement('div');
 	container.appendChild(messageElem);
@@ -2079,6 +2138,11 @@ function createElements(){
 					}
 				}
 				return false;
+			}
+
+			tileElem.onmouseup = tileElem.onmouseleave = function(e){
+				oreHarvesting = null;
+				timerBarContainerElem.style.display = "none";
 			}
 
 			// Prevent context menu from right clicking on the tile
@@ -2161,7 +2225,7 @@ function createElements(){
 		// Overlay for item count
 		var overlay = document.createElement('div');
 		toolOverlays.push(overlay);
-		overlay.setAttribute('class', 'overlay noselect');
+		overlay.setAttribute('class', 'overlayFixedWidth noselect');
 		overlay.innerHTML = '0';
 
 		var toolElem = document.createElement("div");
@@ -2440,7 +2504,7 @@ function generateItemImage(i, iconSize, count){
 		container.style.height = size + 'px';
 		container.appendChild(img);
 		var overlay = document.createElement('div');
-		overlay.setAttribute('class', 'overlay noselect');
+		overlay.setAttribute('class', 'overlayFixedWidth noselect');
 		overlay.innerHTML = count;
 		container.appendChild(overlay);
 		return container;
@@ -2948,6 +3012,75 @@ var deserialize = this.deserialize = function deserialize(stream){
 	}
 }
 
+function oreHarvest(){
+	if(!oreHarvesting){
+		timerBarContainerElem.style.display = "none";
+		oreHarvesting = null;
+		return;
+	}
+	var tile = board[oreHarvesting.x + oreHarvesting.y * ysize];
+	if(tile[oreHarvesting.oreType] <= 0){
+		timerBarContainerElem.style.display = "none";
+		oreHarvesting = null;
+		return;
+	}
+	timerBarContainerElem.style.display = "block";
+	timerBarContainerElem.style.position = "absolute";
+	timerBarContainerElem.style.left = (oreHarvesting.x - scrollPos[0]) * tilesize + "px";
+	timerBarContainerElem.style.top = (oreHarvesting.y - scrollPos[1]) * tilesize + "px";
+	timerBarContainerElem.style.width = "32px";
+	timerBarContainerElem.style.height = "8px";
+	timerBarElem.style.width = (oreHarvesting.timer / oreHarvestInterval * 32) + 'px';
+	timerBarElem.style.height = "8px";
+	if((oreHarvesting.timer + 1) % oreHarvestInterval < oreHarvesting.timer){
+		tile[oreHarvesting.oreType]--;
+		player.addItem({
+			type: oreHarvesting.type,
+			amount: 1,
+		});
+		newPopupText("+1 " + oreHarvesting.type, (oreHarvesting.x - scrollPos[0]) * tilesize,
+			(oreHarvesting.y - scrollPos[1]) * tilesize);
+	}
+	oreHarvesting.timer = (oreHarvesting.timer + 1) % oreHarvestInterval;
+}
+
+function newPopupText(text, x, y, life = 30){
+	var elem = document.createElement("div");
+	elem.innerHTML = text;
+	table.appendChild(elem);
+	var pop = {
+		elem: elem,
+		x: x,
+		y: y,
+		life: life,
+	};
+	elem.setAttribute("class", "overlay");
+	elem.style.position = "absolute";
+	elem.style.left = pop.x + "px";
+	elem.style.top = pop.y + "px";
+	elem.style.zIndex = popupTextZIndex;
+	popupTexts.push(pop);
+}
+
+function stepPopupTexts(){
+	var deleteMe = [];
+	for(var i = 0; i < popupTexts.length; i++){
+		var pop = popupTexts[i];
+		var elem = pop.elem;
+		elem.style.top = pop.y + "px";
+		elem.style.left = pop.x + "px";
+		pop.y -= 1;
+		if(--pop.life <= 0){
+			table.removeChild(elem);
+			deleteMe.push(i);
+		}
+	}
+
+	for(var i = deleteMe.length - 1; 0 <= i; i--){
+		popupTexts.splice(i, 1);
+	}
+}
+
 /// Simulation step function
 function run(){
 	// Iterate all floating objects to update
@@ -2970,6 +3103,10 @@ function run(){
 				tile.structure.frameProc(tile);
 		}
 	}
+
+	oreHarvest();
+
+	stepPopupTexts();
 
 	updateInfo();
 
