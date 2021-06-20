@@ -8,6 +8,8 @@ var viewPortWidth;
 var viewPortHeight;
 var board;
 var tileElems;
+var timerBarContainerElem;
+var timerBarElem;
 var scrollPos = [0, 0];
 var selectedTile = null;
 var selectedCoords = null;
@@ -29,6 +31,8 @@ var miniMapCursorElem;
 var recipeTarget = null;
 var simstep = 0;
 var autosave_frame = 0;
+var oreHarvesting = false;
+var oreHarvestTimer = 0;
 
 // Constants
 var tilesize = 32;
@@ -38,6 +42,7 @@ var textType = isIE() ? "Text" : "text/plain";
 var cursorZIndex = 900;
 var windowZIndex = 1000;
 var tooltipZIndex = 10000;
+var oreHarvestInterval = 20;
 
 var toolBarElem;
 var toolElems = [];
@@ -1570,7 +1575,10 @@ function rotate(){
 /// the world and check with proc functon passed by the caller.
 /// if proc returns nonzero, the item is considered consumed and
 /// disappear from the ground.
+///
+/// @returns the number of items found and processed
 function findItem(sx, sy, proc, single){
+	let ret = 0;
 	for(var j = 0; j < objects.length;){
 		var o = objects[j];
 		var otx = Math.floor(o.x / tilesize);
@@ -1578,8 +1586,9 @@ function findItem(sx, sy, proc, single){
 		if(otx === sx && oty === sy && proc(o)){
 			table.removeChild(o.elem);
 			objects.splice(j, 1);
+			ret++;
 			if(single)
-				return;
+				return ret;
 		}
 		else{
 			// If we happend to successfully find the object and remove
@@ -1587,6 +1596,7 @@ function findItem(sx, sy, proc, single){
 			j++;
 		}
 	}
+	return ret;
 }
 
 function recipeDraw(recipe, onclick){
@@ -1937,14 +1947,32 @@ function harvest(tile){
 		var idx = board.indexOf(tile);
 		var x = idx % ysize;
 		var y = Math.floor(idx / ysize);
-		findItem(x, y, function(o){
+		if(0 === findItem(x, y, function(o){
 			if(o.type in player.inventory)
 				player.inventory[o.type] += 1;
 			else
 				player.inventory[o.type] = 1;
 			updatePlayer();
 			return true;
-		});
+		})){
+			var tile = board[x + y * ysize];
+			var oreType;
+			var itemType;
+			if(tile.ironOre !== 0)
+				oreType = "ironOre", itemType = "Iron Ore";
+			if(tile.copperOre !== 0)
+				oreType = "copperOre", itemType = "Copper Ore";
+			if(tile.coalOre !== 0)
+				oreType = "coalOre", itemType = "Coal Ore";
+			if(oreType){
+				oreHarvesting = {
+					oreType: oreType,
+					type: itemType,
+					x: x,
+					y: y,
+				};
+			}
+		};
 	}
 }
 
@@ -2008,6 +2036,17 @@ function createElements(){
 	cursorGhostElem = document.createElement('div');
 	cursorGhostElem.style.opacity = 0.5;
 	cursorElem.appendChild(cursorGhostElem);
+
+	timerBarContainerElem = document.createElement('div');
+	timerBarContainerElem.style.border = '1px solid';
+	timerBarContainerElem.style.backgroundColor = 'rgb(31, 31, 31)';
+	timerBarContainerElem.style.pointerEvents = 'none';
+	timerBarContainerElem.style.display = 'none';
+	timerBarContainerElem.style.zIndex = cursorZIndex+1;
+	timerBarElem = document.createElement('div');
+	timerBarElem.style.backgroundColor = 'rgb(255, 127, 255)';
+	timerBarContainerElem.appendChild(timerBarElem);
+	table.appendChild(timerBarContainerElem);
 
 	messageElem = document.createElement('div');
 	container.appendChild(messageElem);
@@ -2079,6 +2118,12 @@ function createElements(){
 					}
 				}
 				return false;
+			}
+
+			tileElem.onmouseup = tileElem.onmouseleave = function(e){
+				oreHarvestTimer = 0;
+				oreHarvesting = null;
+				timerBarContainerElem.style.display = "none";
 			}
 
 			// Prevent context menu from right clicking on the tile
@@ -2948,6 +2993,36 @@ var deserialize = this.deserialize = function deserialize(stream){
 	}
 }
 
+function oreHarvest(){
+	if(!oreHarvesting){
+		timerBarContainerElem.style.display = "none";
+		oreHarvesting = null;
+		return;
+	}
+	var tile = board[oreHarvesting.x + oreHarvesting.y * ysize];
+	if(tile[oreHarvesting.oreType] <= 0){
+		timerBarContainerElem.style.display = "none";
+		oreHarvesting = null;
+		return;
+	}
+	timerBarContainerElem.style.display = "block";
+	timerBarContainerElem.style.position = "absolute";
+	timerBarContainerElem.style.left = (oreHarvesting.x - scrollPos[0]) * tilesize + "px";
+	timerBarContainerElem.style.top = (oreHarvesting.y - scrollPos[1]) * tilesize + "px";
+	timerBarContainerElem.style.width = "32px";
+	timerBarContainerElem.style.height = "8px";
+	timerBarElem.style.width = (oreHarvestTimer / oreHarvestInterval * 32) + 'px';
+	timerBarElem.style.height = "8px";
+	if((oreHarvestTimer + 1) % oreHarvestInterval < oreHarvestTimer){
+		tile[oreHarvesting.oreType]--;
+		player.addItem({
+			type: oreHarvesting.type,
+			amount: 1,
+		});
+	}
+	oreHarvestTimer = (oreHarvestTimer + 1) % oreHarvestInterval;
+}
+
 /// Simulation step function
 function run(){
 	// Iterate all floating objects to update
@@ -2970,6 +3045,8 @@ function run(){
 				tile.structure.frameProc(tile);
 		}
 	}
+
+	oreHarvest();
 
 	updateInfo();
 
