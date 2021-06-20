@@ -10,7 +10,6 @@ var board;
 var tileElems;
 var timerBarContainerElem;
 var timerBarElem;
-var popupTextContainerElem;
 var popupTexts = [];
 var scrollPos = [0, 0];
 var selectedTile = null;
@@ -33,7 +32,7 @@ var miniMapCursorElem;
 var recipeTarget = null;
 var simstep = 0;
 var autosave_frame = 0;
-var oreHarvesting = false;
+var oreHarvesting = null;
 
 // Constants
 var tilesize = 32;
