@@ -32,7 +32,6 @@ var recipeTarget = null;
 var simstep = 0;
 var autosave_frame = 0;
 var oreHarvesting = false;
-var oreHarvestTimer = 0;
 
 // Constants
 var tilesize = 32;
@@ -1970,6 +1969,7 @@ function harvest(tile){
 					type: itemType,
 					x: x,
 					y: y,
+					timer: 0,
 				};
 			}
 		};
@@ -2121,7 +2121,6 @@ function createElements(){
 			}
 
 			tileElem.onmouseup = tileElem.onmouseleave = function(e){
-				oreHarvestTimer = 0;
 				oreHarvesting = null;
 				timerBarContainerElem.style.display = "none";
 			}
@@ -3011,16 +3010,16 @@ function oreHarvest(){
 	timerBarContainerElem.style.top = (oreHarvesting.y - scrollPos[1]) * tilesize + "px";
 	timerBarContainerElem.style.width = "32px";
 	timerBarContainerElem.style.height = "8px";
-	timerBarElem.style.width = (oreHarvestTimer / oreHarvestInterval * 32) + 'px';
+	timerBarElem.style.width = (oreHarvesting.timer / oreHarvestInterval * 32) + 'px';
 	timerBarElem.style.height = "8px";
-	if((oreHarvestTimer + 1) % oreHarvestInterval < oreHarvestTimer){
+	if((oreHarvesting.timer + 1) % oreHarvestInterval < oreHarvesting.timer){
 		tile[oreHarvesting.oreType]--;
 		player.addItem({
 			type: oreHarvesting.type,
 			amount: 1,
 		});
 	}
-	oreHarvestTimer = (oreHarvestTimer + 1) % oreHarvestInterval;
+	oreHarvesting.timer = (oreHarvesting.timer + 1) % oreHarvestInterval;
 }
 
 /// Simulation step function
